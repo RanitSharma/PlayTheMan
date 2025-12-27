@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PlayTheMan | Poker is Personal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
+      
+      :root {
+        --bg-primary: #0B0B0C;
+        --bg-secondary: #141416;
+        --accent-gold: #C9A24D;
+        --text-primary: #EDEDED;
+      }
+
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: var(--bg-primary);
+        color: var(--text-primary);
+        margin: 0;
+        overflow: hidden;
+      }
+
+      .gold-text { color: var(--accent-gold); }
+      .gold-border { border-color: var(--accent-gold); }
+      .gold-bg { background-color: var(--accent-gold); }
+
+      .poker-felt {
+        background: radial-gradient(circle at center, #1a1a1c 0%, #0b0b0c 100%);
+      }
+
+      .btn-primary {
+        background-color: var(--accent-gold);
+        color: #000;
+        font-weight: 800;
+        transition: all 0.2s ease;
+      }
+      .btn-primary:hover {
+        background-color: #B8923D;
+        transform: translateY(-1px);
+      }
+
+      .custom-scrollbar::-webkit-scrollbar { 
+        width: 6px; 
+      }
+      .custom-scrollbar::-webkit-scrollbar-track { 
+        background: rgba(0, 0, 0, 0.2); 
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb { 
+        background: #333; 
+        border-radius: 10px;
+        border: 1px solid rgba(201, 162, 77, 0.1);
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: var(--accent-gold);
+      }
+      
+      @keyframes gold-glow {
+        0% { box-shadow: 0 0 5px rgba(201, 162, 77, 0.2); }
+        50% { box-shadow: 0 0 15px rgba(201, 162, 77, 0.5); }
+        100% { box-shadow: 0 0 5px rgba(201, 162, 77, 0.2); }
+      }
+      .active-turn {
+        border-color: var(--accent-gold);
+        animation: gold-glow 2s infinite ease-in-out;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
