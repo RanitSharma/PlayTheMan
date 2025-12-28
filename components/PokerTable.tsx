@@ -18,6 +18,53 @@ interface Props {
   onResolveRequest: (requestId: string, approved: boolean) => void;
 }
 
+const ProgressTimer: React.FC<{ 
+  seconds: number, 
+  max: number, 
+  size?: number, 
+  hideTrack?: boolean, 
+  hideCircle?: boolean,
+  textColor?: string 
+}> = ({ seconds, max, size = 32, hideTrack, hideCircle, textColor = "text-[#C9A24D]" }) => {
+  const radius = size / 2 - 4;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (seconds / max) * circumference;
+
+  return (
+    <div className={`relative flex items-center justify-center ${textColor}`} style={{ width: size, height: size }}>
+      {!hideCircle && (
+        <svg className="absolute inset-0 -rotate-90" width={size} height={size}>
+          {!hideTrack && (
+            <circle
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              stroke="currentColor"
+              strokeWidth="2"
+              fill="transparent"
+              className="opacity-10"
+            />
+          )}
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke="currentColor"
+            strokeWidth="2"
+            fill="transparent"
+            strokeDasharray={circumference}
+            style={{ 
+              strokeDashoffset: isNaN(offset) ? circumference : offset,
+              transition: 'stroke-dashoffset 1s linear'
+            }}
+          />
+        </svg>
+      )}
+      <span className={`text-[11px] font-black z-10`}>{seconds}</span>
+    </div>
+  );
+};
+
 const PokerTable: React.FC<Props> = ({ 
   gameState, myId, onAction, onMuck, onChat, onDevBackToLobby, onRevealFold, 
   onFinancialRequest, onResolveRequest 
@@ -29,17 +76,18 @@ const PokerTable: React.FC<Props> = ({
   const currentTurnPlayer = gameState.players.find(p => p.id === gameState.currentTurnPlayerId);
   
   const [timeLeft, setTimeLeft] = useState(gameState.settings.actionTimerSeconds);
+  const [muckTimeLeft, setMuckTimeLeft] = useState(0);
   const [rightPanelMode, setRightPanelMode] = useState<'chat' | 'ledger'>('chat');
   
   const [isPotExpanded, setIsPotExpanded] = useState(false);
   const [hoveredPotIndex, setHoveredPotIndex] = useState<number | null>(null);
 
   const [showBankModal, setShowBankModal] = useState(false);
+  const [bankTab, setBankTab] = useState<'request' | 'management'>('request');
   const [bankAmount, setBankAmount] = useState<number | undefined>(undefined);
 
   const isHost = gameState.hostId === myId;
   const userChatHistory = gameState.chatHistory.filter(m => !m.isSystem);
-  const myRequests = gameState.pendingRequests.filter(r => r.playerId === myId);
 
   // Detect if user is at the bottom of the chat
   const handleScroll = () => {
@@ -59,16 +107,36 @@ const PokerTable: React.FC<Props> = ({
   }, [userChatHistory, rightPanelMode]);
 
   useEffect(() => {
-    if (!gameState.currentTurnPlayerId || gameState.stage === GameStage.Showdown) {
-      setTimeLeft(gameState.settings.actionTimerSeconds);
-      return;
-    }
     const interval = setInterval(() => {
-      const elapsed = (Date.now() - (gameState.actionStartTime || 0)) / 1000;
-      setTimeLeft(Math.max(0, Math.floor(gameState.settings.actionTimerSeconds - elapsed)));
+      // 1. Action Turn Timer
+      if (gameState.currentTurnPlayerId && gameState.actionStartTime && gameState.stage !== GameStage.Showdown) {
+        const elapsed = (Date.now() - (gameState.actionStartTime || 0)) / 1000;
+        setTimeLeft(Math.max(0, Math.floor(gameState.settings.actionTimerSeconds - elapsed)));
+      } else {
+        setTimeLeft(gameState.settings.actionTimerSeconds);
+      }
+
+      // 2. Muck / Reveal Timer
+      if (gameState.muckChoiceStartTime) {
+        const isShowdown = gameState.stage === GameStage.Showdown;
+        const isRevealing = gameState.muckChoicePlayerId === 'REVEALING';
+        // Intermission: 10s for Showdown/Choice/Muck. 5s for Revealed hands.
+        const postHandMax = (isRevealing && !isShowdown) ? 5 : 10;
+        const elapsedMuck = (Date.now() - (gameState.muckChoiceStartTime || 0)) / 1000;
+        setMuckTimeLeft(Math.max(0, Math.floor(postHandMax - elapsedMuck)));
+      } else {
+        setMuckTimeLeft(0);
+      }
     }, 200);
     return () => clearInterval(interval);
-  }, [gameState.currentTurnPlayerId, gameState.actionStartTime, gameState.settings.actionTimerSeconds, gameState.stage]);
+  }, [
+    gameState.currentTurnPlayerId, 
+    gameState.actionStartTime, 
+    gameState.settings.actionTimerSeconds, 
+    gameState.stage, 
+    gameState.muckChoiceStartTime,
+    gameState.muckChoicePlayerId
+  ]);
 
   const totalPotValue = gameState.pots.reduce((sum, pot) => sum + pot.amount, 0);
   const totalActivePlayers = gameState.players.filter(p => !p.isSpectator).length;
@@ -112,6 +180,14 @@ const PokerTable: React.FC<Props> = ({
     if (timeLeft <= 10) return "text-[#C9A24D] border-[#C9A24D]/50";
     return "text-[#606060] border-white/10";
   };
+
+  const isMuckChoiceActive = gameState.muckChoicePlayerId === myId;
+  const isHandDecided = gameState.stage === GameStage.Showdown || gameState.muckChoicePlayerId;
+  const isShowdown = gameState.stage === GameStage.Showdown;
+  const isRevealing = gameState.muckChoicePlayerId === 'REVEALING';
+  const postHandMax = (isRevealing && !isShowdown) ? 5 : 10;
+
+  const pendingCount = gameState.pendingRequests.length;
 
   return (
     <div className="flex-1 flex overflow-hidden relative">
@@ -169,14 +245,19 @@ const PokerTable: React.FC<Props> = ({
               <button onClick={() => setRightPanelMode(rightPanelMode === 'ledger' ? 'chat' : 'ledger')} className={`backdrop-blur-xl border px-6 py-4 rounded-full text-[10px] font-black uppercase tracking-[0.4em] transition-all shadow-2xl ${rightPanelMode === 'ledger' ? 'bg-[#C9A24D] text-black border-black/20' : 'bg-[#141416]/90 text-[#C9A24D] border-[#C9A24D]/40 hover:bg-[#C9A24D] hover:text-black'}`}>
                 {rightPanelMode === 'ledger' ? 'Live Table' : 'Ledger'}
               </button>
-              <button onClick={() => setShowBankModal(true)} className="bg-[#141416]/90 border border-[#C9A24D]/40 text-[#C9A24D] px-6 py-4 rounded-full text-[10px] font-black uppercase tracking-[0.4em] transition-all hover:bg-[#C9A24D] hover:text-black shadow-2xl">
+              <button onClick={() => { setShowBankModal(true); setBankTab(isHost ? 'management' : 'request'); }} className="relative bg-[#141416]/90 border border-[#C9A24D]/40 text-[#C9A24D] px-6 py-4 rounded-full text-[10px] font-black uppercase tracking-[0.4em] transition-all hover:bg-[#C9A24D] hover:text-black shadow-2xl group">
                 Bank
+                {isHost && pendingCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full border border-black shadow-lg animate-bounce group-hover:animate-none">
+                    {pendingCount}
+                  </span>
+                )}
               </button>
             </div>
           </div>
         </div>
 
-        {/* Table Felt */}
+        {/* Reverted Table Layout */}
         <div className="flex-1 relative flex items-center justify-center px-4 sm:px-12 py-20 mt-8 z-[100]">
           <div className="relative w-full aspect-[2.4/1] max-w-[1400px] bg-[#141416] rounded-[300px] border-[20px] border-[#1C1C1F] shadow-[0_150px_300px_rgba(0,0,0,1)] flex items-center justify-center">
             
@@ -220,11 +301,63 @@ const PokerTable: React.FC<Props> = ({
           </div>
         </div>
         
-        {/* Turn Indicator Corner */}
+        {/* Action / Information Corner (Top Right) */}
         <div className="absolute top-6 right-6 z-[800] flex flex-col items-end gap-3 pointer-events-none">
           <div className="pointer-events-auto transform scale-90 origin-top-right flex flex-col items-end gap-3">
+             
+             {/* 1. MY TURN ACTIONS */}
              {myPlayer && !myPlayer.isFolded && !myPlayer.isSpectator && gameState.currentTurnPlayerId === myId && gameState.stage !== GameStage.Showdown ? (
                <ActionPanel myPlayer={myPlayer} gameState={gameState} onAction={onAction} />
+             
+             /* 2. MUCK / SHOW CHOICE (POST-WIN) */
+             ) : isMuckChoiceActive ? (
+               <div className="bg-[#141416]/95 backdrop-blur-2xl rounded-[2.5rem] border border-[#C9A24D]/40 p-6 shadow-2xl flex flex-col items-center gap-4 animate-in slide-in-from-right-4">
+                  <div className="flex flex-col items-center">
+                    <h3 className="text-xl font-black text-white tracking-tighter uppercase mb-0.5">Victory</h3>
+                    <p className="text-[9px] font-black text-[#C9A24D] uppercase tracking-[0.4em]">The Choice is Yours</p>
+                  </div>
+                  
+                  <div className="flex gap-3">
+                    <button 
+                      onClick={() => onMuck(false)}
+                      className="bg-white/5 hover:bg-white/10 text-[#606060] hover:text-white border border-white/10 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all active:scale-95"
+                    >
+                      Muck
+                    </button>
+                    <button 
+                      onClick={() => onMuck(true)}
+                      className="bg-gradient-to-b from-[#C9A24D] to-[#B8923D] text-black border border-black/10 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all shadow-[0_5px_20px_rgba(201,162,77,0.3)] active:scale-95"
+                    >
+                      Show
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <ProgressTimer seconds={muckTimeLeft} max={postHandMax} size={36} />
+                    <span className="text-[8px] font-black text-[#404040] uppercase tracking-widest">Auto-muck</span>
+                  </div>
+               </div>
+
+             /* 3. FOLDED STATE / REVEAL FOLD */
+             ) : myPlayer?.isFolded && !myPlayer.isRevealingFold && gameState.stage !== GameStage.Lobby ? (
+                <div className="flex flex-col gap-4 items-end animate-in slide-in-from-right-4">
+                   <div className="bg-[#141416]/95 backdrop-blur-2xl rounded-3xl border border-[#C9A24D]/30 px-6 py-4 shadow-2xl">
+                      <span className="text-[12px] font-black text-[#606060] uppercase tracking-[0.1em]">You are folded</span>
+                   </div>
+                   {isHandDecided && muckTimeLeft > 0 && myPlayer.holeCards && (
+                      <button 
+                        onClick={onRevealFold}
+                        className="bg-gradient-to-b from-[#C9A24D] to-[#B8923D] hover:from-[#D4B063] hover:to-[#C9A24D] text-black border border-black/10 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] transition-all shadow-[0_15px_30px_rgba(201,162,77,0.3)] active:scale-95 animate-in slide-in-from-bottom-2 flex items-center gap-4"
+                      >
+                        <span>Reveal Folded Hand</span>
+                        <div className="flex items-center justify-center">
+                          <ProgressTimer seconds={muckTimeLeft} max={postHandMax} size={24} hideCircle textColor="text-black" />
+                        </div>
+                      </button>
+                   )}
+                </div>
+
+             /* 4. OTHER PLAYER'S TURN */
              ) : currentTurnPlayer && (
                 <div className="flex items-center gap-4 bg-[#141416]/95 backdrop-blur-2xl rounded-3xl border border-[#C9A24D]/30 px-6 py-4 shadow-2xl">
                    <div className="w-2.5 h-2.5 bg-[#C9A24D] rounded-full animate-pulse shadow-[0_0_10px_rgba(201,162,77,0.5)]" />
@@ -242,43 +375,6 @@ const PokerTable: React.FC<Props> = ({
              {rightPanelMode === 'chat' ? 'COMMUNICATION' : 'BANK LEDGER'}
            </h3>
         </div>
-
-        {/* Global Financial Requests */}
-        {gameState.pendingRequests.length > 0 && (
-          <div className="p-4 bg-[#C9A24D]/5 border-b border-white/10 space-y-3 animate-in fade-in duration-300">
-            <div className="flex items-center gap-2 mb-1 px-1">
-               <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-ping" />
-               <span className="text-[9px] font-black text-[#C9A24D] uppercase tracking-[0.3em]">Bank Requests</span>
-            </div>
-            {gameState.pendingRequests.map(r => (
-              <div key={r.id} className="bg-[#141416] border border-[#C9A24D]/40 p-4 rounded-2xl flex flex-col gap-3 shadow-xl transform transition-transform hover:scale-[1.02]">
-                <div className="flex justify-between items-center">
-                   <span className="text-[11px] font-black text-white uppercase truncate max-w-[120px]">{r.playerName}</span>
-                   <div className="flex flex-col items-end">
-                      <span className={`px-2 py-0.5 rounded-[4px] text-[8px] font-black uppercase ${r.type === FinancialRequestType.BuyIn ? 'bg-[#C9A24D] text-black' : 'bg-blue-600 text-white'}`}>
-                        {r.type === FinancialRequestType.BuyIn ? 'In' : 'Cashout'}
-                      </span>
-                      {r.status === 'approved' && <span className="text-[7px] text-[#C9A24D] font-black mt-1 uppercase">Next Round</span>}
-                   </div>
-                </div>
-                <div className="text-xl font-black text-[#C9A24D] tracking-tighter">${r.amount.toFixed(2)}</div>
-                
-                {r.status === 'pending' ? (
-                  isHost ? (
-                    <div className="flex gap-2">
-                       <button onClick={() => onResolveRequest(r.id, true)} className="flex-1 bg-[#C9A24D] hover:bg-[#B8923D] text-black text-[9px] font-black py-2.5 rounded-xl transition-all active:scale-95">APPROVE</button>
-                       <button onClick={() => onResolveRequest(r.id, false)} className="flex-1 bg-white/5 hover:bg-white/10 text-white text-[9px] font-black py-2.5 rounded-xl border border-white/10 transition-all active:scale-95">REJECT</button>
-                    </div>
-                  ) : (
-                    <div className="text-[9px] font-black text-[#505050] uppercase tracking-widest text-center py-2 bg-black/30 rounded-lg border border-white/5">Waiting for Host</div>
-                  )
-                ) : (
-                  <div className="text-[9px] font-black text-[#C9A24D] uppercase tracking-widest text-center py-2 bg-[#C9A24D]/10 rounded-lg border border-[#C9A24D]/30">APPROVED - WAITING FOR NEXT ROUND</div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
 
         {rightPanelMode === 'chat' ? (
           <>
@@ -332,52 +428,120 @@ const PokerTable: React.FC<Props> = ({
       {/* Bank Modal */}
       {showBankModal && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6 bg-black/90 backdrop-blur-xl animate-in fade-in duration-300">
-           <div className="bg-[#141416] border border-[#C9A24D]/30 w-full max-w-sm rounded-[2.5rem] p-10 shadow-[0_50px_150px_rgba(0,0,0,1)] relative">
-              <button onClick={() => setShowBankModal(false)} className="absolute top-6 right-8 text-[#606060] hover:text-[#C9A24D] text-3xl font-black">×</button>
-              <div className="flex flex-col items-center mb-8">
+           <div className="bg-[#141416] border border-[#C9A24D]/30 w-full max-w-lg rounded-[2.5rem] p-8 shadow-[0_50px_150px_rgba(0,0,0,1)] relative flex flex-col overflow-hidden max-h-[85vh]">
+              <button onClick={() => setShowBankModal(false)} className="absolute top-6 right-8 text-[#606060] hover:text-[#C9A24D] text-3xl font-black z-50">×</button>
+              
+              <div className="flex flex-col items-center mb-6 shrink-0">
                  <h2 className="text-2xl font-black text-white tracking-tighter uppercase mb-1">Banker's Desk</h2>
-                 <p className="text-[10px] font-black text-[#C9A24D] uppercase tracking-[0.4em] opacity-80">Settlement</p>
+                 <p className="text-[10px] font-black text-[#C9A24D] uppercase tracking-[0.4em] opacity-80">Settlement & Audit</p>
               </div>
-              <div className="space-y-4">
-                 <div className="relative">
-                    <input 
-                      type="number" 
-                      step="any"
-                      value={bankAmount ?? ''} 
-                      placeholder="0.00"
-                      onChange={(e) => setBankAmount(parseFloat(e.target.value) || undefined)} 
-                      className="w-full bg-[#0B0B0C] border-2 border-[#C9A24D]/20 rounded-2xl px-10 py-6 text-[#C9A24D] font-black text-3xl outline-none focus:border-[#C9A24D] text-center shadow-inner [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
-                    />
-                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-[#C9A24D] opacity-30 font-black text-xl">$</span>
-                 </div>
-                 <button 
-                   disabled={myRequests.some(r => r.status === 'pending') || !bankAmount || bankAmount <= 0} 
-                   onClick={() => { if(bankAmount) { onFinancialRequest(FinancialRequestType.BuyIn, bankAmount); setShowBankModal(false); } }} 
-                   className="w-full bg-gradient-to-b from-[#C9A24D] to-[#B8923D] hover:from-[#D4B063] hover:to-[#C9A24D] text-[#000] py-6 rounded-2xl font-black uppercase tracking-[0.3em] text-[12px] shadow-[0_10px_30px_rgba(201,162,77,0.2)] transition-all disabled:opacity-20 active:scale-95"
-                 >
-                   Submit Buy-In
-                 </button>
-                 <button 
-                   disabled={myRequests.some(r => r.status === 'pending') || !bankAmount || bankAmount <= 0 || bankAmount > (myPlayer?.chips || 0)} 
-                   onClick={() => { if(bankAmount) { onFinancialRequest(FinancialRequestType.BuyOut, bankAmount); setShowBankModal(false); } }} 
-                   className="w-full bg-transparent border-2 border-white/10 hover:bg-white/5 text-white py-6 rounded-2xl font-black uppercase tracking-[0.3em] text-[12px] transition-all disabled:opacity-20 active:scale-95"
-                 >
-                   Submit Cash-Out
-                 </button>
 
-                 <div className="pt-4 border-t border-white/5">
-                    <button 
-                      disabled={myRequests.some(r => r.status === 'pending') || !myPlayer || myPlayer.chips <= 0}
-                      onClick={() => { 
-                        if (myPlayer) onFinancialRequest(FinancialRequestType.BuyOut, myPlayer.chips); 
-                        setShowBankModal(false); 
-                      }} 
-                      className="w-full bg-red-950/20 border-2 border-red-900/40 hover:bg-red-900/40 text-red-500 py-6 rounded-2xl font-black uppercase tracking-[0.3em] text-[12px] transition-all active:scale-95 disabled:opacity-30"
-                    >
-                      Cashout All Stack
-                    </button>
-                    <p className="text-[8px] text-[#606060] text-center mt-2 uppercase tracking-widest">Host approval required. Applies next round.</p>
-                 </div>
+              {isHost && (
+                <div className="flex gap-2 mb-6 bg-black/20 p-1 rounded-2xl shrink-0">
+                  <button 
+                    onClick={() => setBankTab('management')}
+                    className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${bankTab === 'management' ? 'bg-[#C9A24D] text-black shadow-lg' : 'text-[#606060] hover:text-white'}`}
+                  >
+                    Management ({pendingCount})
+                  </button>
+                  <button 
+                    onClick={() => setBankTab('request')}
+                    className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${bankTab === 'request' ? 'bg-[#C9A24D] text-black shadow-lg' : 'text-[#606060] hover:text-white'}`}
+                  >
+                    My Requests
+                  </button>
+                </div>
+              )}
+
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
+                {bankTab === 'request' ? (
+                  <div className="space-y-8 py-2">
+                    <div className="bg-[#0B0B0C] border border-white/5 p-6 rounded-3xl text-center">
+                      <div className="text-[10px] font-black text-[#404040] uppercase tracking-[0.4em] mb-2">Current Wallet</div>
+                      <div className="text-3xl font-black text-white tracking-tighter">${myPlayer?.chips.toLocaleString()}</div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="relative">
+                          <input 
+                            type="number" 
+                            step="any"
+                            value={bankAmount ?? ''} 
+                            placeholder="0.00"
+                            onChange={(e) => setBankAmount(parseFloat(e.target.value) || undefined)} 
+                            className="w-full bg-[#0B0B0C] border-2 border-[#C9A24D]/20 rounded-2xl px-10 py-6 text-[#C9A24D] font-black text-3xl outline-none focus:border-[#C9A24D] text-center shadow-inner [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
+                          />
+                          <span className="absolute left-6 top-1/2 -translate-y-1/2 text-[#C9A24D] opacity-30 font-black text-xl">$</span>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <button 
+                          disabled={!bankAmount || bankAmount <= 0} 
+                          onClick={() => { if(bankAmount) { onFinancialRequest(FinancialRequestType.BuyIn, bankAmount); setShowBankModal(false); } }} 
+                          className="bg-gradient-to-b from-[#C9A24D] to-[#B8923D] hover:from-[#D4B063] hover:to-[#C9A24D] text-black py-5 rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-lg transition-all disabled:opacity-20 active:scale-95"
+                        >
+                          Request Buy-In
+                        </button>
+                        <button 
+                          disabled={!bankAmount || bankAmount <= 0 || (myPlayer?.chips || 0) < bankAmount} 
+                          onClick={() => { if(bankAmount) { onFinancialRequest(FinancialRequestType.BuyOut, bankAmount); setShowBankModal(false); } }} 
+                          className="bg-[#1C1C1F] border border-[#C9A24D]/30 text-[#C9A24D] hover:bg-[#C9A24D]/10 py-5 rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-lg transition-all disabled:opacity-20 active:scale-95"
+                        >
+                          Request Cash-out
+                        </button>
+                      </div>
+                      <p className="text-center text-[9px] font-black text-[#404040] uppercase tracking-widest leading-loose pt-2 px-8">
+                        Decisions are pending host approval.<br/>Changes applied next round.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3 py-2">
+                    {gameState.pendingRequests.length > 0 ? gameState.pendingRequests.map(req => (
+                      <div key={req.id} className="bg-[#0B0B0C] border border-white/5 p-5 rounded-3xl flex items-center justify-between group">
+                        <div className="flex flex-col">
+                          <span className="text-[11px] font-black text-[#EDEDED] uppercase tracking-wider">{req.playerName}</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${req.type === FinancialRequestType.BuyIn ? 'bg-green-600/20 text-green-500' : 'bg-red-600/20 text-red-500'}`}>
+                              {req.type === FinancialRequestType.BuyIn ? 'Buy-In' : 'Cash-out'}
+                            </span>
+                            <span className="text-[14px] font-black text-[#C9A24D]">${req.amount.toLocaleString()}</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          {req.status === 'pending' ? (
+                            <>
+                              <button 
+                                onClick={() => onResolveRequest(req.id, false)}
+                                className="w-10 h-10 rounded-xl bg-red-600/10 border border-red-600/30 text-red-500 flex items-center justify-center hover:bg-red-600 hover:text-white transition-all active:scale-90"
+                                title="Deny"
+                              >
+                                ×
+                              </button>
+                              <button 
+                                onClick={() => onResolveRequest(req.id, true)}
+                                className="w-10 h-10 rounded-xl bg-[#C9A24D]/10 border border-[#C9A24D]/30 text-[#C9A24D] flex items-center justify-center hover:bg-[#C9A24D] hover:text-black transition-all active:scale-90"
+                                title="Approve"
+                              >
+                                ✓
+                              </button>
+                            </>
+                          ) : (
+                            <div className="flex flex-col items-end pr-2">
+                              <span className="text-[9px] font-black text-[#C9A24D] uppercase tracking-widest animate-pulse">Approved</span>
+                              <span className="text-[7px] font-black text-[#404040] uppercase tracking-tighter">Pending Next Round</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )) : (
+                      <div className="h-64 flex flex-col items-center justify-center gap-4 text-center opacity-30">
+                        <div className="text-4xl">📭</div>
+                        <span className="text-[10px] font-black uppercase tracking-[0.4em]">No Pending Applications</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
            </div>
         </div>

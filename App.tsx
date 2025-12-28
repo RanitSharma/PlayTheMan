@@ -164,7 +164,6 @@ class MockServer {
     const { smallBlind, bigBlind } = this.state.settings;
     if (smallBlind <= 0 || bigBlind <= 0) return;
 
-    // Apply approved financial requests BEFORE starting the next hand
     this.applyApprovedRequests();
 
     const seatedPlayers = this.state.players.filter(p => !p.isSpectator && p.isReady && p.isConnected).sort((a,b) => a.seatIndex - b.seatIndex);
@@ -412,17 +411,19 @@ class MockServer {
       }
     });
 
+    this.state.muckChoiceStartTime = Date.now();
+
     if (seated.length > 1) {
       this.state.stage = GameStage.Showdown;
       this.payoutPots(seated);
       this.state.muckChoicePlayerId = 'REVEALING';
-      setTimeout(() => this.resetForNextHand(), 5000);
+      // Hand transition in 10s for showdown.
     } else if (seated.length === 1) {
       const winner = seated[0];
       winner.isWinner = true;
       this.payoutPots(seated);
+      // Winner has 10s choice. Transition in 10s if muck/timeout.
       this.state.muckChoicePlayerId = winner.id;
-      this.state.muckChoiceStartTime = Date.now();
     }
     
     this.broadcast('room:update', this.state);
@@ -434,16 +435,12 @@ class MockServer {
       this.state.muckChoicePlayerId = 'REVEALING';
       const p = this.state.players.find(p => p.id === playerId);
       if (p) p.isRevealingFold = true; 
+      this.state.muckChoiceStartTime = Date.now(); // Start 5s reveal timer
       this.broadcast('room:update', this.state);
-      setTimeout(() => {
-        this.state.muckChoicePlayerId = null;
-        this.state.muckChoiceStartTime = null;
-        this.resetForNextHand();
-      }, 3000);
     } else {
-      this.state.muckChoicePlayerId = null;
-      this.state.muckChoiceStartTime = null;
-      this.resetForNextHand();
+      // Prompt: 10 seconds if all choose to muck.
+      this.state.muckChoicePlayerId = 'MUCKED';
+      this.broadcast('room:update', this.state);
     }
   }
 
@@ -566,6 +563,8 @@ class MockServer {
     const p = this.state.players.find(p => p.id === playerId);
     if (p && p.holeCards) {
       p.isRevealingFold = true;
+      this.state.muckChoicePlayerId = 'REVEALING';
+      this.state.muckChoiceStartTime = Date.now(); // Start 5s reveal timer
       this.broadcast('room:update', this.state);
     }
   }
@@ -620,9 +619,9 @@ class MockServer {
   }
 
   handleMuckTimeout() {
-    if (this.state.muckChoicePlayerId && this.state.muckChoicePlayerId !== 'REVEALING') {
-        this.handleMuckChoice({ playerId: this.state.muckChoicePlayerId, show: false });
-    }
+    this.state.muckChoicePlayerId = null;
+    this.state.muckChoiceStartTime = null;
+    this.resetForNextHand();
   }
 }
 
@@ -649,9 +648,14 @@ export default function App() {
             server.handleTimeout(gameState.currentTurnPlayerId!);
         }
       }
-      if (gameState.muckChoicePlayerId && gameState.muckChoicePlayerId !== 'REVEALING') {
+      if (gameState.muckChoiceStartTime) {
         const elapsedMuck = (Date.now() - (gameState.muckChoiceStartTime || 0)) / 1000;
-        if (elapsedMuck >= 5) {
+        const isShowdown = gameState.stage === GameStage.Showdown;
+        const isRevealing = gameState.muckChoicePlayerId === 'REVEALING';
+        // Showdown intermission is 10s. Reveals (Show, Reveal Fold) are 5s. 
+        // Mucks and Inactivity are 10s.
+        const limit = (isRevealing && !isShowdown) ? 5 : 10;
+        if (elapsedMuck >= limit && gameState.muckChoicePlayerId) {
             server.handleMuckTimeout();
         }
       }
@@ -681,6 +685,8 @@ export default function App() {
           onChat={(text) => server.emit('chat:message', { senderId: myId, senderName: currentUserName, text })} 
           onDevAddFake={() => server.emit('dev:fill-ais', {})} 
           onDevToggleReady={(id) => server.emit('dev:toggle-ready', id)} 
+          onFinancialRequest={(type, amount) => server.emit('financial:request', { playerId: myId, type, amount })}
+          onResolveRequest={(requestId, approved) => server.emit('financial:resolve', { requestId, approved })}
         />
       ) : (
         <PokerTable 

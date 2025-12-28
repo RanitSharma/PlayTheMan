@@ -1,5 +1,6 @@
-import React from 'react';
-import { GameState, RoomSettings } from '../types';
+
+import React, { useState } from 'react';
+import { GameState, RoomSettings, FinancialRequestType } from '../types';
 
 interface Props {
   gameState: GameState;
@@ -10,6 +11,8 @@ interface Props {
   onChat: (t: string) => void;
   onDevAddFake: () => void;
   onDevToggleReady: (id: string) => void;
+  onFinancialRequest: (type: FinancialRequestType, amount: number) => void;
+  onResolveRequest: (requestId: string, approved: boolean) => void;
 }
 
 const Lobby: React.FC<Props> = ({ 
@@ -18,8 +21,14 @@ const Lobby: React.FC<Props> = ({
   onReady, 
   onStart, 
   onSettingsUpdate,
-  onDevAddFake
+  onDevAddFake,
+  onFinancialRequest,
+  onResolveRequest
 }) => {
+  const [showBankModal, setShowBankModal] = useState(false);
+  const [bankTab, setBankTab] = useState<'request' | 'management'>('request');
+  const [bankAmount, setBankAmount] = useState<number | undefined>(undefined);
+
   const myPlayer = gameState.players.find(p => p.id === myId);
   const seated = gameState.players.filter(p => !p.isSpectator).sort((a, b) => {
       if (a.id === gameState.hostId) return -1;
@@ -40,7 +49,7 @@ const Lobby: React.FC<Props> = ({
     onSettingsUpdate({ [key]: isNaN(val) ? 0 : val });
   };
 
-  // Removed default text color from base to prevent conflicts
+  const pendingCount = gameState.pendingRequests.length;
   const inputBaseClasses = "bg-[#0B0B0C] border border-white/5 focus:border-[#C9A24D]/30 font-black text-2xl tracking-tighter h-16 rounded-2xl outline-none transition-all w-full text-center placeholder:text-[#404040] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
 
   return (
@@ -77,23 +86,37 @@ const Lobby: React.FC<Props> = ({
                     </div>
                   </div>
                 </div>
-                <span className={`text-[10px] font-black uppercase tracking-[0.3em] ${p.isReady ? 'text-[#C9A24D]' : 'text-[#505050]'}`}>
-                  {p.isReady ? 'READY' : 'WAITING'}
-                </span>
+                <div className="flex items-center gap-4">
+                  <span className="text-[14px] font-black text-[#C9A24D] tracking-tighter">${p.chips.toLocaleString()}</span>
+                  <span className={`text-[10px] font-black uppercase tracking-[0.3em] ${p.isReady ? 'text-[#C9A24D]' : 'text-[#505050]'}`}>
+                    {p.isReady ? 'READY' : 'WAITING'}
+                  </span>
+                </div>
               </div>
             ))}
           </div>
 
-          {isHost && seated.length < 10 && (
-            <div className="flex flex-col pt-4">
+          <div className="flex flex-col gap-3 pt-4">
+            <button 
+              onClick={() => { setShowBankModal(true); setBankTab(isHost ? 'management' : 'request'); }}
+              className="w-full relative text-[10px] font-black text-[#C9A24D] uppercase tracking-[0.4em] transition-all bg-[#1C1C1F] border border-[#C9A24D]/20 hover:border-[#C9A24D]/60 py-4 rounded-xl active:scale-[0.98] shadow-lg"
+            >
+              Access Banker's Desk
+              {isHost && pendingCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full border border-black shadow-lg animate-bounce">
+                  {pendingCount}
+                </span>
+              )}
+            </button>
+            {isHost && seated.length < 10 && (
               <button 
                 onClick={onDevAddFake}
-                className="w-full text-[10px] font-black text-[#606060] hover:text-[#C9A24D] uppercase tracking-[0.4em] transition-all bg-transparent border border-white/5 hover:border-[#C9A24D]/30 py-4 rounded-xl active:scale-[0.98]"
+                className="w-full text-[10px] font-black text-[#606060] hover:text-[#EDEDED] uppercase tracking-[0.4em] transition-all bg-transparent border border-white/5 hover:border-white/10 py-4 rounded-xl active:scale-[0.98]"
               >
                 FILL TABLE WITH AIS
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Right Panel: Configurations */}
@@ -183,6 +206,128 @@ const Lobby: React.FC<Props> = ({
           </div>
         </div>
       </div>
+
+      {/* Bank Modal Shared Logic */}
+      {showBankModal && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6 bg-black/90 backdrop-blur-xl animate-in fade-in duration-300">
+           <div className="bg-[#141416] border border-[#C9A24D]/30 w-full max-w-lg rounded-[2.5rem] p-8 shadow-[0_50px_150px_rgba(0,0,0,1)] relative flex flex-col overflow-hidden max-h-[85vh]">
+              <button onClick={() => setShowBankModal(false)} className="absolute top-6 right-8 text-[#606060] hover:text-[#C9A24D] text-3xl font-black z-50">×</button>
+              
+              <div className="flex flex-col items-center mb-6 shrink-0">
+                 <h2 className="text-2xl font-black text-white tracking-tighter uppercase mb-1">Banker's Desk</h2>
+                 <p className="text-[10px] font-black text-[#C9A24D] uppercase tracking-[0.4em] opacity-80">Settlement & Audit</p>
+              </div>
+
+              {isHost && (
+                <div className="flex gap-2 mb-6 bg-black/20 p-1 rounded-2xl shrink-0">
+                  <button 
+                    onClick={() => setBankTab('management')}
+                    className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${bankTab === 'management' ? 'bg-[#C9A24D] text-black shadow-lg' : 'text-[#606060] hover:text-white'}`}
+                  >
+                    Management ({pendingCount})
+                  </button>
+                  <button 
+                    onClick={() => setBankTab('request')}
+                    className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${bankTab === 'request' ? 'bg-[#C9A24D] text-black shadow-lg' : 'text-[#606060] hover:text-white'}`}
+                  >
+                    My Requests
+                  </button>
+                </div>
+              )}
+
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
+                {bankTab === 'request' ? (
+                  <div className="space-y-8 py-2">
+                    <div className="bg-[#0B0B0C] border border-white/5 p-6 rounded-3xl text-center">
+                      <div className="text-[10px] font-black text-[#404040] uppercase tracking-[0.4em] mb-2">Current Wallet</div>
+                      <div className="text-3xl font-black text-white tracking-tighter">${myPlayer?.chips.toLocaleString()}</div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="relative">
+                          <input 
+                            type="number" 
+                            step="any"
+                            value={bankAmount ?? ''} 
+                            placeholder="0.00"
+                            onChange={(e) => setBankAmount(parseFloat(e.target.value) || undefined)} 
+                            className="w-full bg-[#0B0B0C] border-2 border-[#C9A24D]/20 rounded-2xl px-10 py-6 text-[#C9A24D] font-black text-3xl outline-none focus:border-[#C9A24D] text-center shadow-inner [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
+                          />
+                          <span className="absolute left-6 top-1/2 -translate-y-1/2 text-[#C9A24D] opacity-30 font-black text-xl">$</span>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <button 
+                          disabled={!bankAmount || bankAmount <= 0} 
+                          onClick={() => { if(bankAmount) { onFinancialRequest(FinancialRequestType.BuyIn, bankAmount); setShowBankModal(false); } }} 
+                          className="bg-gradient-to-b from-[#C9A24D] to-[#B8923D] hover:from-[#D4B063] hover:to-[#C9A24D] text-black py-5 rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-lg transition-all disabled:opacity-20 active:scale-95"
+                        >
+                          Request Buy-In
+                        </button>
+                        <button 
+                          disabled={!bankAmount || bankAmount <= 0 || (myPlayer?.chips || 0) < bankAmount} 
+                          onClick={() => { if(bankAmount) { onFinancialRequest(FinancialRequestType.BuyOut, bankAmount); setShowBankModal(false); } }} 
+                          className="bg-[#1C1C1F] border border-[#C9A24D]/30 text-[#C9A24D] hover:bg-[#C9A24D]/10 py-5 rounded-2xl font-black uppercase tracking-widest text-[11px] shadow-lg transition-all disabled:opacity-20 active:scale-95"
+                        >
+                          Request Cash-out
+                        </button>
+                      </div>
+                      <p className="text-center text-[9px] font-black text-[#404040] uppercase tracking-widest leading-loose pt-2 px-8">
+                        Decisions are pending host approval.<br/>Changes applied next round.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3 py-2">
+                    {gameState.pendingRequests.length > 0 ? gameState.pendingRequests.map(req => (
+                      <div key={req.id} className="bg-[#0B0B0C] border border-white/5 p-5 rounded-3xl flex items-center justify-between group">
+                        <div className="flex flex-col">
+                          <span className="text-[11px] font-black text-[#EDEDED] uppercase tracking-wider">{req.playerName}</span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${req.type === FinancialRequestType.BuyIn ? 'bg-green-600/20 text-green-500' : 'bg-red-600/20 text-red-500'}`}>
+                              {req.type === FinancialRequestType.BuyIn ? 'Buy-In' : 'Cash-out'}
+                            </span>
+                            <span className="text-[14px] font-black text-[#C9A24D]">${req.amount.toLocaleString()}</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          {req.status === 'pending' ? (
+                            <>
+                              <button 
+                                onClick={() => onResolveRequest(req.id, false)}
+                                className="w-10 h-10 rounded-xl bg-red-600/10 border border-red-600/30 text-red-500 flex items-center justify-center hover:bg-red-600 hover:text-white transition-all active:scale-90"
+                                title="Deny"
+                              >
+                                ×
+                              </button>
+                              <button 
+                                onClick={() => onResolveRequest(req.id, true)}
+                                className="w-10 h-10 rounded-xl bg-[#C9A24D]/10 border border-[#C9A24D]/30 text-[#C9A24D] flex items-center justify-center hover:bg-[#C9A24D] hover:text-black transition-all active:scale-90"
+                                title="Approve"
+                              >
+                                ✓
+                              </button>
+                            </>
+                          ) : (
+                            <div className="flex flex-col items-end pr-2">
+                              <span className="text-[9px] font-black text-[#C9A24D] uppercase tracking-widest animate-pulse">Approved</span>
+                              <span className="text-[7px] font-black text-[#404040] uppercase tracking-tighter">Pending Next Round</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )) : (
+                      <div className="h-64 flex flex-col items-center justify-center gap-4 text-center opacity-30">
+                        <div className="text-4xl">📭</div>
+                        <span className="text-[10px] font-black uppercase tracking-[0.4em]">No Pending Applications</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+           </div>
+        </div>
+      )}
     </div>
   );
 };

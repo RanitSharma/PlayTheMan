@@ -22,6 +22,11 @@ const Seat: React.FC<Props> = ({
 }) => {
   const isShowdown = stage === GameStage.Showdown;
   const isRevealing = muckChoicePlayerId === 'REVEALING';
+  // Cards are shown if:
+  // 1. It's the user's own cards
+  // 2. It's a showdown and the player hasn't folded
+  // 3. The player explicitly clicked "Reveal Fold" (even if they are folded)
+  // 4. It's the end-of-hand reveal phase and they are the winner
   const shouldReveal = isMe || (isShowdown && !player.isFolded) || player.isRevealingFold || (isRevealing && player.isWinner);
   
   const isWinner = player.isWinner;
@@ -34,9 +39,21 @@ const Seat: React.FC<Props> = ({
   const cardHeight = isCompact ? 'h-24 sm:h-28' : 'h-32';
   const plateWidth = isCompact ? 'w-32 sm:w-36' : 'w-40';
 
-  const cardClasses = `${cardWidth} ${cardHeight} rounded-xl shadow-2xl overflow-hidden transition-all duration-500 transform ${isTurn ? 'scale-110 -translate-y-2' : 'scale-100'} ${isWinner || isHighlighted ? 'ring-2 ring-[#C9A24D] shadow-[0_0_30px_rgba(201,162,77,0.6)]' : 'border border-[#C9A24D]/20'}`;
+  // Specific treatment for revealed folded cards: desaturated but glowing
+  const revealFoldClasses = player.isRevealingFold && player.isFolded 
+    ? 'grayscale-[0.3] opacity-90' 
+    : '';
 
-  const baseOpacity = (player.isFolded && !player.isRevealingFold) || isBust ? 'opacity-30 grayscale-[0.8]' : isDimmed ? 'opacity-20 grayscale-[0.4]' : 'opacity-100';
+  const cardClasses = `${cardWidth} ${cardHeight} rounded-xl shadow-2xl overflow-hidden transition-all duration-500 transform ${isTurn ? 'scale-110 -translate-y-2' : 'scale-100'} ${isWinner || isHighlighted ? 'ring-2 ring-[#C9A24D] shadow-[0_0_30px_rgba(201,162,77,0.6)]' : 'border border-[#C9A24D]/20'} ${revealFoldClasses}`;
+
+  // Base container opacity logic
+  // If a player is folded and NOT revealing, they are dimmed. 
+  // If they ARE revealing a fold, they get a "ghostly" active state.
+  const baseOpacity = (player.isFolded && !player.isRevealingFold) || isBust 
+    ? 'opacity-30 grayscale-[0.8]' 
+    : isDimmed 
+      ? 'opacity-20 grayscale-[0.4]' 
+      : 'opacity-100';
 
   return (
     <div className={`flex flex-col items-center gap-3 sm:gap-4 transition-all duration-500 ${baseOpacity} ${isLoser && !player.isRevealingFold ? 'opacity-30' : ''}`}>
@@ -49,7 +66,8 @@ const Seat: React.FC<Props> = ({
               className={cardClasses} 
               style={{ 
                 zIndex: i,
-                transform: `rotate(${i === 0 ? -6 : 6}deg)`
+                transform: `rotate(${i === 0 ? -6 : 6}deg)`,
+                boxShadow: player.isRevealingFold && player.isFolded ? '0 0 20px rgba(201,162,77,0.2)' : undefined
               }}
             >
               {shouldReveal ? <Card card={c} compact /> : (
@@ -73,6 +91,7 @@ const Seat: React.FC<Props> = ({
       <div className={`
         relative ${plateWidth} bg-[#141416] p-3 sm:p-4 rounded-[1.2rem] sm:rounded-[1.5rem] border-2 flex flex-col items-center shadow-xl transition-all duration-500
         ${(isTurn || isHighlighted) && !isBust ? 'active-turn scale-105 border-[#C9A24D]' : isWinner ? 'border-[#C9A24D] shadow-[0_0_40px_rgba(201,162,77,0.4)]' : 'border-white/5'}
+        ${player.isRevealingFold && player.isFolded ? 'border-[#C9A24D]/40' : ''}
       `}>
         
         {player.role && !isBust && (
