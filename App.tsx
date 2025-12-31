@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { GameState, GameStage, PlayerAction, Card, Player, ChatMessage, RoomSettings, Rank, Suit, FinancialRequest, FinancialRequestType } from './types';
@@ -417,12 +416,10 @@ class MockServer {
       this.state.stage = GameStage.Showdown;
       this.payoutPots(seated);
       this.state.muckChoicePlayerId = 'REVEALING';
-      // Hand transition in 10s for showdown.
     } else if (seated.length === 1) {
       const winner = seated[0];
       winner.isWinner = true;
       this.payoutPots(seated);
-      // Winner has 10s choice. Transition in 10s if muck/timeout.
       this.state.muckChoicePlayerId = winner.id;
     }
     
@@ -435,10 +432,9 @@ class MockServer {
       this.state.muckChoicePlayerId = 'REVEALING';
       const p = this.state.players.find(p => p.id === playerId);
       if (p) p.isRevealingFold = true; 
-      this.state.muckChoiceStartTime = Date.now(); // Start 5s reveal timer
+      this.state.muckChoiceStartTime = Date.now();
       this.broadcast('room:update', this.state);
     } else {
-      // Prompt: 10 seconds if all choose to muck.
       this.state.muckChoicePlayerId = 'MUCKED';
       this.broadcast('room:update', this.state);
     }
@@ -564,7 +560,7 @@ class MockServer {
     if (p && p.holeCards) {
       p.isRevealingFold = true;
       this.state.muckChoicePlayerId = 'REVEALING';
-      this.state.muckChoiceStartTime = Date.now(); // Start 5s reveal timer
+      this.state.muckChoiceStartTime = Date.now();
       this.broadcast('room:update', this.state);
     }
   }
@@ -652,8 +648,6 @@ export default function App() {
         const elapsedMuck = (Date.now() - (gameState.muckChoiceStartTime || 0)) / 1000;
         const isShowdown = gameState.stage === GameStage.Showdown;
         const isRevealing = gameState.muckChoicePlayerId === 'REVEALING';
-        // Showdown intermission is 10s. Reveals (Show, Reveal Fold) are 5s. 
-        // Mucks and Inactivity are 10s.
         const limit = (isRevealing && !isShowdown) ? 5 : 10;
         if (elapsedMuck >= limit && gameState.muckChoicePlayerId) {
             server.handleMuckTimeout();

@@ -1,45 +1,78 @@
+
 import React from 'react';
 import { Card as CardType, Suit } from '../types';
 
 interface CardProps {
   card: CardType;
   compact?: boolean;
+  isBoard?: boolean;
+  isMinimal?: boolean;
 }
 
-export const Card: React.FC<CardProps> = ({ card, compact }) => {
+export const Card: React.FC<CardProps> = ({ card, compact, isBoard, isMinimal }) => {
   const suitIcon = { [Suit.Spades]: '♠', [Suit.Hearts]: '♥', [Suit.Diamonds]: '♦', [Suit.Clubs]: '♣' }[card.suit];
   const isRed = card.suit === Suit.Hearts || card.suit === Suit.Diamonds;
   
-  return (
-    <div className={`w-full h-full bg-[#0B0B0C] rounded-xl flex flex-col items-center justify-center font-black border border-[#C9A24D]/60 shadow-[0_10px_30px_rgba(0,0,0,0.8)] relative overflow-hidden ${compact ? 'p-1.5' : 'p-4 sm:p-6'}`}>
-      
-      <div className="absolute inset-0 opacity-[0.15] pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/dark-leather.png')]" />
-      <div className="absolute inset-[3px] border border-[#C9A24D]/20 rounded-lg pointer-events-none" />
+  // In the reference image for board cards, black suits are rendered in Gold.
+  // For the minimal variant, we keep standard red for hearts/diamonds and gold for spades/clubs.
+  const suitColorClass = isRed ? 'text-[#E31C23]' : 'text-[#C9A24D]';
+  
+  if (isMinimal) {
+    return (
+      <div className="w-full h-full bg-[#0B0B0C] rounded-lg flex flex-col items-center justify-center font-black border border-[#C9A24D]/20 shadow-lg relative overflow-hidden p-1">
+        <div className="flex-1 flex items-center justify-center pt-1">
+          <span className="text-white text-[13px] sm:text-[15px] font-bold leading-none">
+            {card.rank}
+          </span>
+        </div>
+        <div className="flex-1 flex items-center justify-center pb-1">
+          <span className={`${suitColorClass} text-[10px] sm:text-[12px] leading-none`}>
+            {suitIcon}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
-      <div className="absolute top-3 left-3 flex flex-col items-center leading-none z-10">
-        <span className={`${compact ? 'text-lg' : 'text-3xl sm:text-4xl'} text-[#C9A24D] font-serif tracking-tighter mb-0.5`}>
+  return (
+    <div className={`w-full h-full bg-[#0B0B0C] rounded-xl flex flex-col items-center justify-center font-black border border-[#C9A24D]/40 shadow-[0_15px_40px_rgba(0,0,0,0.9)] relative overflow-hidden ${compact ? 'p-1' : 'p-4 sm:p-6'}`}>
+      
+      {/* Subtle Texture & Inner Border Layer */}
+      <div className="absolute inset-0 opacity-[0.2] pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/dark-leather.png')]" />
+      <div className={`absolute ${compact ? 'inset-[3px]' : 'inset-[6px]'} border border-[#C9A24D]/20 rounded-lg pointer-events-none`} />
+
+      {/* Main Rank (Top Left) - Large Gold Serif */}
+      <div className={`absolute ${compact ? 'top-1.5 left-2' : 'top-5 left-6'} flex flex-col items-center leading-none z-20`}>
+        <span className={`
+          ${compact ? 'text-[22px] sm:text-[24px]' : 'text-5xl sm:text-7xl'} 
+          text-[#C9A24D] font-serif font-bold tracking-tighter drop-shadow-[0_2px_10px_rgba(0,0,0,1)]
+        `}>
           {card.rank}
         </span>
       </div>
 
-      <div className={`relative z-10 flex items-center justify-center transition-transform duration-500 ${compact ? 'scale-100' : 'scale-125 sm:scale-150'}`}>
+      {/* Massive Central Suit Icon - High visibility */}
+      <div className={`
+        relative z-10 flex items-center justify-center transition-transform duration-500
+        ${compact ? (isBoard ? 'scale-125 translate-y-2' : 'scale-110 translate-y-1.5') : 'scale-110 sm:scale-130 translate-y-2'}
+      `}>
         <span className={`
-          ${isRed ? 'text-red-600' : 'text-[#C9A24D]'} 
-          ${compact ? 'text-4xl' : 'text-7xl sm:text-8xl'} 
-          drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)] leading-none
+          ${suitColorClass} 
+          ${compact ? (isBoard ? 'text-7xl' : 'text-6xl') : 'text-9xl sm:text-[11rem]'} 
+          drop-shadow-[0_10px_30px_rgba(0,0,0,0.9)] leading-none select-none
         `}>
           {suitIcon}
         </span>
       </div>
 
-      <div className="absolute bottom-3 right-3 rotate-180 flex flex-col items-center leading-none z-10 opacity-40">
-        <span className={`${compact ? 'text-xs' : 'text-xl'} text-[#C9A24D] font-serif`}>
+      {/* Small Inverted Rank (Bottom Right) - As seen in the reference image */}
+      <div className={`absolute ${compact ? 'bottom-2 right-2' : 'bottom-6 right-8'} rotate-180 flex flex-col items-center leading-none z-20 opacity-40`}>
+        <span className={`
+          ${compact ? 'text-[12px]' : 'text-xl'} 
+          text-[#C9A24D] font-serif font-bold tracking-tighter
+        `}>
           {card.rank}
         </span>
-      </div>
-      
-      <div className="absolute bottom-2 left-0 right-0 text-center opacity-[0.05] pointer-events-none">
-        <span className="text-[6px] font-black text-[#C9A24D] tracking-[1em] uppercase">Premium</span>
       </div>
     </div>
   );

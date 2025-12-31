@@ -1,4 +1,3 @@
-
 export enum Suit {
   Spades = 's', Hearts = 'h', Diamonds = 'd', Clubs = 'c'
 }

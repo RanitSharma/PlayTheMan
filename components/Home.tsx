@@ -43,7 +43,14 @@ export const Home: React.FC<HomeProps> = ({ onJoin }) => {
             </div>
           </div>
           
-          <div className="flex items-center justify-center gap-4 py-1">
+          <button 
+            type="submit" 
+            className="w-full bg-gradient-to-b from-[#C9A24D] to-[#B8923D] hover:from-[#D4B063] hover:to-[#C9A24D] text-[#000] py-3.5 rounded-2xl font-black uppercase tracking-[0.3em] text-[13px] transition-all shadow-[0_20px_40px_rgba(201,162,77,0.25)] active:scale-[0.98]"
+          >
+            Enter Room
+          </button>
+
+          <div className="flex items-center justify-center gap-4 pt-1">
             <div 
               className={`flex items-center gap-3 cursor-pointer select-none group`} 
               onClick={() => setIsSpec(!isSpec)}
@@ -56,13 +63,6 @@ export const Home: React.FC<HomeProps> = ({ onJoin }) => {
               </span>
             </div>
           </div>
-
-          <button 
-            type="submit" 
-            className="w-full bg-gradient-to-b from-[#C9A24D] to-[#B8923D] hover:from-[#D4B063] hover:to-[#C9A24D] text-[#000] py-3.5 rounded-2xl font-black uppercase tracking-[0.3em] text-[13px] transition-all shadow-[0_20px_40px_rgba(201,162,77,0.25)] active:scale-[0.98]"
-          >
-            Enter Room
-          </button>
         </form>
 
         <div className="mt-16 space-y-4">

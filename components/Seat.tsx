@@ -21,13 +21,11 @@ const Seat: React.FC<Props> = ({
   muckChoicePlayerId, lastActionPlayerId, isHighlighted, isDimmed 
 }) => {
   const isShowdown = stage === GameStage.Showdown;
-  const isRevealing = muckChoicePlayerId === 'REVEALING';
-  // Cards are shown if:
-  // 1. It's the user's own cards
-  // 2. It's a showdown and the player hasn't folded
-  // 3. The player explicitly clicked "Reveal Fold" (even if they are folded)
-  // 4. It's the end-of-hand reveal phase and they are the winner
-  const shouldReveal = isMe || (isShowdown && !player.isFolded) || player.isRevealingFold || (isRevealing && player.isWinner);
+  // A card should be revealed if:
+  // 1. It belongs to the current user (isMe)
+  // 2. The game is at showdown and the player didn't fold
+  // 3. The player has explicitly opted to reveal their hand (isRevealingFold)
+  const shouldReveal = isMe || (isShowdown && !player.isFolded) || !!player.isRevealingFold;
   
   const isWinner = player.isWinner;
   const isLoser = isShowdown && !player.isFolded && !isWinner;
@@ -39,16 +37,12 @@ const Seat: React.FC<Props> = ({
   const cardHeight = isCompact ? 'h-24 sm:h-28' : 'h-32';
   const plateWidth = isCompact ? 'w-32 sm:w-36' : 'w-40';
 
-  // Specific treatment for revealed folded cards: desaturated but glowing
   const revealFoldClasses = player.isRevealingFold && player.isFolded 
     ? 'grayscale-[0.3] opacity-90' 
     : '';
 
   const cardClasses = `${cardWidth} ${cardHeight} rounded-xl shadow-2xl overflow-hidden transition-all duration-500 transform ${isTurn ? 'scale-110 -translate-y-2' : 'scale-100'} ${isWinner || isHighlighted ? 'ring-2 ring-[#C9A24D] shadow-[0_0_30px_rgba(201,162,77,0.6)]' : 'border border-[#C9A24D]/20'} ${revealFoldClasses}`;
 
-  // Base container opacity logic
-  // If a player is folded and NOT revealing, they are dimmed. 
-  // If they ARE revealing a fold, they get a "ghostly" active state.
   const baseOpacity = (player.isFolded && !player.isRevealingFold) || isBust 
     ? 'opacity-30 grayscale-[0.8]' 
     : isDimmed 

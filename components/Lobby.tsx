@@ -56,9 +56,9 @@ const Lobby: React.FC<Props> = ({
     <div className="flex-1 flex flex-col p-6 lg:p-10 bg-[#0B0B0C] items-center justify-center animate-in fade-in duration-700">
       <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-[1fr,0.85fr] gap-8 items-start">
         
-        {/* Left Panel: Players List */}
-        <div className="bg-[#141416]/60 p-8 sm:p-10 rounded-[2.5rem] border border-white/5 shadow-2xl flex flex-col min-h-[550px] lg:min-h-[650px] relative overflow-hidden">
-          <div className="flex justify-between items-start mb-10">
+        {/* Changed min-h to fixed h for stable scrolling */}
+        <div className="bg-[#141416]/60 p-8 sm:p-10 rounded-[2.5rem] border border-white/5 shadow-2xl flex flex-col h-[550px] lg:h-[650px] relative overflow-hidden">
+          <div className="flex justify-between items-start mb-10 shrink-0">
             <div className="flex gap-4 items-center">
               <svg viewBox="0 0 100 100" className="h-12 w-auto">
                 <rect x="15" y="20" width="55" height="75" rx="2" fill="none" stroke="#C9A24D" strokeWidth="3" opacity="0.4" />
@@ -96,7 +96,7 @@ const Lobby: React.FC<Props> = ({
             ))}
           </div>
 
-          <div className="flex flex-col gap-3 pt-4">
+          <div className="flex flex-col gap-3 pt-4 shrink-0">
             <button 
               onClick={() => { setShowBankModal(true); setBankTab(isHost ? 'management' : 'request'); }}
               className="w-full relative text-[10px] font-black text-[#C9A24D] uppercase tracking-[0.4em] transition-all bg-[#1C1C1F] border border-[#C9A24D]/20 hover:border-[#C9A24D]/60 py-4 rounded-xl active:scale-[0.98] shadow-lg"
@@ -119,7 +119,6 @@ const Lobby: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Right Panel: Configurations */}
         <div className="flex flex-col pt-4">
           <div className="mb-8 space-y-2 text-center lg:text-left">
              <h2 className="text-2xl font-black text-[#EDEDED] uppercase tracking-tight">GAME CONFIGURATIONS</h2>
@@ -207,7 +206,6 @@ const Lobby: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Bank Modal Shared Logic */}
       {showBankModal && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6 bg-black/90 backdrop-blur-xl animate-in fade-in duration-300">
            <div className="bg-[#141416] border border-[#C9A24D]/30 w-full max-w-lg rounded-[2.5rem] p-8 shadow-[0_50px_150px_rgba(0,0,0,1)] relative flex flex-col overflow-hidden max-h-[85vh]">

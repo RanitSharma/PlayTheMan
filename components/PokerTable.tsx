@@ -89,7 +89,6 @@ const PokerTable: React.FC<Props> = ({
   const isHost = gameState.hostId === myId;
   const userChatHistory = gameState.chatHistory.filter(m => !m.isSystem);
 
-  // Detect if user is at the bottom of the chat
   const handleScroll = () => {
     if (!chatRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = chatRef.current;
@@ -108,7 +107,6 @@ const PokerTable: React.FC<Props> = ({
 
   useEffect(() => {
     const interval = setInterval(() => {
-      // 1. Action Turn Timer
       if (gameState.currentTurnPlayerId && gameState.actionStartTime && gameState.stage !== GameStage.Showdown) {
         const elapsed = (Date.now() - (gameState.actionStartTime || 0)) / 1000;
         setTimeLeft(Math.max(0, Math.floor(gameState.settings.actionTimerSeconds - elapsed)));
@@ -116,11 +114,9 @@ const PokerTable: React.FC<Props> = ({
         setTimeLeft(gameState.settings.actionTimerSeconds);
       }
 
-      // 2. Muck / Reveal Timer
       if (gameState.muckChoiceStartTime) {
         const isShowdown = gameState.stage === GameStage.Showdown;
         const isRevealing = gameState.muckChoicePlayerId === 'REVEALING';
-        // Intermission: 10s for Showdown/Choice/Muck. 5s for Revealed hands.
         const postHandMax = (isRevealing && !isShowdown) ? 5 : 10;
         const elapsedMuck = (Date.now() - (gameState.muckChoiceStartTime || 0)) / 1000;
         setMuckTimeLeft(Math.max(0, Math.floor(postHandMax - elapsedMuck)));
@@ -192,7 +188,6 @@ const PokerTable: React.FC<Props> = ({
   return (
     <div className="flex-1 flex overflow-hidden relative">
       <div className="flex-1 relative flex flex-col bg-[#0B0B0C] poker-felt overflow-hidden">
-        {/* Table UI Header */}
         <div className="w-full flex flex-col items-center pt-6 pb-2 z-[200] pointer-events-none">
            <div 
              className="flex flex-col items-center mb-4 cursor-pointer group relative pointer-events-auto"
@@ -231,13 +226,25 @@ const PokerTable: React.FC<Props> = ({
            </div>
         </div>
 
-        {/* Evaluation & Primary Controls */}
         <div className="absolute left-6 top-6 z-[800] flex flex-col gap-4">
           <div className="flex gap-4 items-start">
             {myEvaluation && gameState.stage !== GameStage.Lobby && (
-              <div className="bg-[#141416]/95 border border-[#C9A24D]/40 px-6 py-4 rounded-[1.5rem] shadow-2xl backdrop-blur-3xl flex flex-col items-center transition-opacity duration-500">
-                <span className="text-[9px] font-black text-[#606060] uppercase tracking-[0.5em] mb-2">My Hand</span>
-                <span className="text-lg font-black text-[#C9A24D] tracking-wider uppercase drop-shadow-md">{myEvaluation.label}</span>
+              <div className="bg-[#141416]/95 border border-[#C9A24D]/40 px-5 py-4 rounded-[2rem] shadow-2xl backdrop-blur-3xl flex flex-col items-center transition-all duration-500 animate-in slide-in-from-left-4">
+                <span className="text-[9px] font-black text-[#606060] uppercase tracking-[0.5em] mb-3">My Hand</span>
+                
+                <div className="flex items-center gap-1 mb-3">
+                  {myEvaluation.bestFive.map((card, i) => (
+                    <div key={i} className="w-9 h-14 sm:w-11 sm:h-16 transform transition-transform hover:scale-110 duration-200">
+                      <Card card={card} isMinimal />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="bg-[#C9A24D]/10 border border-[#C9A24D]/20 px-4 py-1.5 rounded-full">
+                  <span className="text-[11px] font-black text-[#C9A24D] tracking-[0.15em] uppercase drop-shadow-md">
+                    {myEvaluation.label}
+                  </span>
+                </div>
               </div>
             )}
             
@@ -257,7 +264,6 @@ const PokerTable: React.FC<Props> = ({
           </div>
         </div>
 
-        {/* Reverted Table Layout */}
         <div className="flex-1 relative flex items-center justify-center px-4 sm:px-12 py-20 mt-8 z-[100]">
           <div className="relative w-full aspect-[2.4/1] max-w-[1400px] bg-[#141416] rounded-[300px] border-[20px] border-[#1C1C1F] shadow-[0_150px_300px_rgba(0,0,0,1)] flex items-center justify-center">
             
@@ -265,7 +271,7 @@ const PokerTable: React.FC<Props> = ({
               <div className="flex gap-4 sm:gap-6 h-32 sm:h-44">
                 {[...Array(5)].map((_, i) => (
                   <div key={i} className={`w-20 h-full sm:w-28 rounded-xl bg-[#0B0B0C] border border-[#C9A24D]/10 flex items-center justify-center shadow-[0_20px_40px_rgba(0,0,0,0.9)] overflow-hidden transition-all duration-700 ${gameState.communityCards[i] ? 'opacity-100 scale-100' : 'opacity-20 scale-95'}`}>
-                    {gameState.communityCards[i] ? <Card card={gameState.communityCards[i]} /> : <div className="text-[10px] font-black tracking-[0.5em] text-[#C9A24D] opacity-10">PTM</div>}
+                    {gameState.communityCards[i] ? <Card card={gameState.communityCards[i]} compact isBoard /> : <div className="text-[10px] font-black tracking-[0.5em] text-[#C9A24D] opacity-10">PTM</div>}
                   </div>
                 ))}
               </div>
@@ -301,15 +307,12 @@ const PokerTable: React.FC<Props> = ({
           </div>
         </div>
         
-        {/* Action / Information Corner (Top Right) */}
         <div className="absolute top-6 right-6 z-[800] flex flex-col items-end gap-3 pointer-events-none">
           <div className="pointer-events-auto transform scale-90 origin-top-right flex flex-col items-end gap-3">
              
-             {/* 1. MY TURN ACTIONS */}
              {myPlayer && !myPlayer.isFolded && !myPlayer.isSpectator && gameState.currentTurnPlayerId === myId && gameState.stage !== GameStage.Showdown ? (
                <ActionPanel myPlayer={myPlayer} gameState={gameState} onAction={onAction} />
              
-             /* 2. MUCK / SHOW CHOICE (POST-WIN) */
              ) : isMuckChoiceActive ? (
                <div className="bg-[#141416]/95 backdrop-blur-2xl rounded-[2.5rem] border border-[#C9A24D]/40 p-6 shadow-2xl flex flex-col items-center gap-4 animate-in slide-in-from-right-4">
                   <div className="flex flex-col items-center">
@@ -338,7 +341,6 @@ const PokerTable: React.FC<Props> = ({
                   </div>
                </div>
 
-             /* 3. FOLDED STATE / REVEAL FOLD */
              ) : myPlayer?.isFolded && !myPlayer.isRevealingFold && gameState.stage !== GameStage.Lobby ? (
                 <div className="flex flex-col gap-4 items-end animate-in slide-in-from-right-4">
                    <div className="bg-[#141416]/95 backdrop-blur-2xl rounded-3xl border border-[#C9A24D]/30 px-6 py-4 shadow-2xl">
@@ -357,7 +359,6 @@ const PokerTable: React.FC<Props> = ({
                    )}
                 </div>
 
-             /* 4. OTHER PLAYER'S TURN */
              ) : currentTurnPlayer && (
                 <div className="flex items-center gap-4 bg-[#141416]/95 backdrop-blur-2xl rounded-3xl border border-[#C9A24D]/30 px-6 py-4 shadow-2xl">
                    <div className="w-2.5 h-2.5 bg-[#C9A24D] rounded-full animate-pulse shadow-[0_0_10px_rgba(201,162,77,0.5)]" />
@@ -368,7 +369,6 @@ const PokerTable: React.FC<Props> = ({
         </div>
       </div>
 
-      {/* Side Panel */}
       <div className="w-80 border-l border-white/10 flex flex-col bg-[#0B0B0C] z-[900] shadow-2xl">
         <div className="p-6 border-b border-white/5 bg-[#141416] flex justify-center items-center shrink-0">
            <h3 className="text-[10px] font-black text-[#C9A24D] uppercase tracking-[0.6em]">
@@ -425,7 +425,6 @@ const PokerTable: React.FC<Props> = ({
         )}
       </div>
 
-      {/* Bank Modal */}
       {showBankModal && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center p-6 bg-black/90 backdrop-blur-xl animate-in fade-in duration-300">
            <div className="bg-[#141416] border border-[#C9A24D]/30 w-full max-w-lg rounded-[2.5rem] p-8 shadow-[0_50px_150px_rgba(0,0,0,1)] relative flex flex-col overflow-hidden max-h-[85vh]">
