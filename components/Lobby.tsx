@@ -29,6 +29,13 @@ const Lobby: React.FC<Props> = ({
   const [bankTab, setBankTab] = useState<'request' | 'management'>('request');
   const [bankAmount, setBankAmount] = useState<number | undefined>(undefined);
 
+  // Local string state to handle typing decimals naturally without parent numeric state interference
+  const [inputState, setInputState] = useState({
+    smallBlind: gameState.settings.smallBlind > 0 ? gameState.settings.smallBlind.toString() : '',
+    bigBlind: gameState.settings.bigBlind > 0 ? gameState.settings.bigBlind.toString() : '',
+    startingStack: gameState.settings.startingStack > 0 ? gameState.settings.startingStack.toString() : ''
+  });
+
   const myPlayer = gameState.players.find(p => p.id === myId);
   const seated = gameState.players.filter(p => !p.isSpectator).sort((a, b) => {
       if (a.id === gameState.hostId) return -1;
@@ -44,19 +51,33 @@ const Lobby: React.FC<Props> = ({
 
   const allReady = seated.length >= 2 && seated.every(p => p.isReady) && rulesComplete;
 
-  const handleSettingChange = (e: React.ChangeEvent<HTMLInputElement>, key: keyof RoomSettings) => {
-    const val = parseFloat(e.target.value);
-    onSettingsUpdate({ [key]: isNaN(val) ? 0 : val });
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>, key: keyof RoomSettings) => {
+    const val = e.target.value;
+    // Strictly allow only digits, one optional dot, and max 2 decimal places
+    if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
+      setInputState(prev => ({ ...prev, [key]: val }));
+      const numericVal = parseFloat(val);
+      onSettingsUpdate({ [key]: isNaN(numericVal) ? 0 : numericVal });
+    }
+  };
+
+  const handleBlur = (key: keyof RoomSettings) => {
+    const currentVal = inputState[key as keyof typeof inputState];
+    if (currentVal !== '') {
+      const numeric = parseFloat(currentVal);
+      if (!isNaN(numeric)) {
+        setInputState(prev => ({ ...prev, [key]: numeric.toFixed(2) }));
+      }
+    }
   };
 
   const pendingCount = gameState.pendingRequests.length;
-  const inputBaseClasses = "bg-[#0B0B0C] border border-white/5 focus:border-[#C9A24D]/30 font-black text-2xl tracking-tighter h-16 rounded-2xl outline-none transition-all w-full text-center placeholder:text-[#404040] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none";
+  const inputBaseClasses = "bg-[#0B0B0C] border border-white/5 focus:border-[#C9A24D]/30 font-black text-2xl tracking-tighter h-16 rounded-2xl outline-none transition-all w-full text-center placeholder:text-[#404040]";
 
   return (
     <div className="flex-1 flex flex-col p-6 lg:p-10 bg-[#0B0B0C] items-center justify-center animate-in fade-in duration-700">
       <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-[1fr,0.85fr] gap-8 items-start">
         
-        {/* Changed min-h to fixed h for stable scrolling */}
         <div className="bg-[#141416]/60 p-8 sm:p-10 rounded-[2.5rem] border border-white/5 shadow-2xl flex flex-col h-[550px] lg:h-[650px] relative overflow-hidden">
           <div className="flex justify-between items-start mb-10 shrink-0">
             <div className="flex gap-4 items-center">
@@ -87,7 +108,7 @@ const Lobby: React.FC<Props> = ({
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
-                  <span className="text-[14px] font-black text-[#C9A24D] tracking-tighter">${p.chips.toLocaleString()}</span>
+                  <span className="text-[14px] font-black text-[#C9A24D] tracking-tighter">${p.chips.toFixed(2)}</span>
                   <span className={`text-[10px] font-black uppercase tracking-[0.3em] ${p.isReady ? 'text-[#C9A24D]' : 'text-[#505050]'}`}>
                     {p.isReady ? 'READY' : 'WAITING'}
                   </span>
@@ -133,24 +154,26 @@ const Lobby: React.FC<Props> = ({
                    <div className="flex flex-col gap-4">
                       <label className="text-[11px] font-black text-[#606060] uppercase tracking-[0.4em] text-center">SMALL BLIND</label>
                       <input 
-                        type="number" 
-                        step="any"
+                        type="text" 
+                        inputMode="decimal"
                         readOnly={!isHost}
-                        value={gameState.settings.smallBlind === 0 ? '' : gameState.settings.smallBlind} 
-                        onChange={(e) => handleSettingChange(e, 'smallBlind')} 
-                        placeholder="0" 
+                        value={inputState.smallBlind} 
+                        onChange={(e) => handleInputChange(e, 'smallBlind')} 
+                        onBlur={() => handleBlur('smallBlind')}
+                        placeholder="0.00" 
                         className={`${inputBaseClasses} text-[#EDEDED]`} 
                       />
                    </div>
                    <div className="flex flex-col gap-4">
                       <label className="text-[11px] font-black text-[#606060] uppercase tracking-[0.4em] text-center">BIG BLIND</label>
                       <input 
-                        type="number" 
-                        step="any"
+                        type="text" 
+                        inputMode="decimal"
                         readOnly={!isHost}
-                        value={gameState.settings.bigBlind === 0 ? '' : gameState.settings.bigBlind} 
-                        onChange={(e) => handleSettingChange(e, 'bigBlind')} 
-                        placeholder="0" 
+                        value={inputState.bigBlind} 
+                        onChange={(e) => handleInputChange(e, 'bigBlind')} 
+                        onBlur={() => handleBlur('bigBlind')}
+                        placeholder="0.00" 
                         className={`${inputBaseClasses} text-[#EDEDED]`} 
                       />
                    </div>
@@ -160,12 +183,13 @@ const Lobby: React.FC<Props> = ({
                    <label className="text-[11px] font-black text-[#606060] uppercase tracking-[0.4em] text-center">STARTING STACK</label>
                    <div className="relative">
                       <input 
-                        type="number" 
-                        step="any"
+                        type="text" 
+                        inputMode="decimal"
                         readOnly={!isHost}
-                        value={gameState.settings.startingStack === 0 ? '' : gameState.settings.startingStack} 
-                        onChange={(e) => handleSettingChange(e, 'startingStack')} 
-                        placeholder="0" 
+                        value={inputState.startingStack} 
+                        onChange={(e) => handleInputChange(e, 'startingStack')} 
+                        onBlur={() => handleBlur('startingStack')}
+                        placeholder="0.00" 
                         className={`${inputBaseClasses} px-14 text-3xl text-[#C9A24D]`} 
                       />
                       <span className="absolute left-7 top-1/2 -translate-y-1/2 text-2xl font-black text-[#C9A24D] opacity-40">$</span>
@@ -238,14 +262,14 @@ const Lobby: React.FC<Props> = ({
                   <div className="space-y-8 py-2">
                     <div className="bg-[#0B0B0C] border border-white/5 p-6 rounded-3xl text-center">
                       <div className="text-[10px] font-black text-[#404040] uppercase tracking-[0.4em] mb-2">Current Wallet</div>
-                      <div className="text-3xl font-black text-white tracking-tighter">${myPlayer?.chips.toLocaleString()}</div>
+                      <div className="text-3xl font-black text-white tracking-tighter">${myPlayer?.chips.toFixed(2)}</div>
                     </div>
 
                     <div className="space-y-4">
                       <div className="relative">
                           <input 
                             type="number" 
-                            step="any"
+                            step="0.01"
                             value={bankAmount ?? ''} 
                             placeholder="0.00"
                             onChange={(e) => setBankAmount(parseFloat(e.target.value) || undefined)} 
@@ -285,7 +309,7 @@ const Lobby: React.FC<Props> = ({
                             <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${req.type === FinancialRequestType.BuyIn ? 'bg-green-600/20 text-green-500' : 'bg-red-600/20 text-red-500'}`}>
                               {req.type === FinancialRequestType.BuyIn ? 'Buy-In' : 'Cash-out'}
                             </span>
-                            <span className="text-[14px] font-black text-[#C9A24D]">${req.amount.toLocaleString()}</span>
+                            <span className="text-[14px] font-black text-[#C9A24D]">${req.amount.toFixed(2)}</span>
                           </div>
                         </div>
                         <div className="flex gap-2">
