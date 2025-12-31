@@ -13,9 +13,12 @@ const ActionPanel: React.FC<Props> = ({ myPlayer, gameState, onAction }) => {
   const toCall = maxStreetBet - myPlayer.betThisStreet;
   const canCheck = toCall === 0;
   const maxPossible = myPlayer.chips + myPlayer.betThisStreet;
-  const totalPot = gameState.pots.reduce((sum, pot) => sum + pot.amount, 0);
   
-  // Use string state to allow natural typing (e.g., "10.") and enforce decimal precision
+  // The "current pot" for betting purposes should include all chips in pots plus all bets currently on the table
+  const currentTotalPot = gameState.pots.reduce((sum, pot) => sum + pot.amount, 0) + 
+                         gameState.players.reduce((sum, p) => sum + p.betThisStreet, 0);
+  
+  // Use string state to allow natural typing and enforce decimal precision
   const [raiseAmount, setRaiseAmount] = useState<string>('');
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -28,15 +31,29 @@ const ActionPanel: React.FC<Props> = ({ myPlayer, gameState, onAction }) => {
 
   const getClampedRaise = () => {
     const numVal = parseFloat(raiseAmount);
-    const base = isNaN(numVal) ? gameState.minRaise : numVal;
-    // Enforce 2 decimal rounding for the final submitted value
+    
+    let base: number;
+    if (isNaN(numVal)) {
+      if (canCheck) {
+        // Default for opening if nothing is typed: min raise
+        base = gameState.minRaise;
+      } else {
+        // Default for facing action: +1.5x logic -> (1.5 * maxStreetBet) + maxStreetBet
+        base = maxStreetBet * 2.5;
+      }
+    } else {
+      base = numVal;
+    }
+
+    // Enforce 2 decimal rounding
     const rounded = Math.round(base * 100) / 100;
+    // Ensure it's between legal minimum and player's total stack
     return Math.min(maxPossible, Math.max(gameState.minRaise, rounded));
   };
 
   const clampedValue = getClampedRaise();
 
-  // Multipliers for when facing a bet (additive to the call)
+  // Facing a bet: +1.5x, +2x, +3x, ALL-IN
   const facingBetIncrements = [
     { label: '+1.5×', multiplier: 1.5 },
     { label: '+2×', multiplier: 2.0 },
@@ -44,7 +61,7 @@ const ActionPanel: React.FC<Props> = ({ myPlayer, gameState, onAction }) => {
     { label: 'ALL-IN', multiplier: -1 },
   ];
 
-  // Percentages for when leading/starting the action (Percentage of pot)
+  // Starting the action: 25%, 50%, 75%, POT, ALL-IN
   const startingActionIncrements = [
     { label: '25%', multiplier: 0.25 },
     { label: '50%', multiplier: 0.5 },
@@ -61,9 +78,12 @@ const ActionPanel: React.FC<Props> = ({ myPlayer, gameState, onAction }) => {
 
     let calculatedAmount = 0;
     if (canCheck) {
-      calculatedAmount = totalPot * mult;
+      // 25% is 25% of current pot
+      calculatedAmount = currentTotalPot * mult;
     } else {
-      calculatedAmount = maxStreetBet + (toCall * mult);
+      // Formula: (multiplier * highBet) + highBet 
+      // i.e. "1.5x the call + the call"
+      calculatedAmount = (mult * maxStreetBet) + maxStreetBet;
     }
 
     // Clamp and format to 2 decimals
@@ -97,7 +117,9 @@ const ActionPanel: React.FC<Props> = ({ myPlayer, gameState, onAction }) => {
               disabled={myPlayer.chips === 0} 
               className="h-11 bg-[#1C1C1F] hover:bg-[#C9A24D]/10 text-[#C9A24D] font-black uppercase tracking-widest border border-[#C9A24D]/50 rounded-xl transition-all flex flex-col items-center justify-center disabled:opacity-30 active:scale-95 group"
             >
-              <span className="leading-none text-[7px] opacity-60 group-hover:opacity-100 transition-opacity tracking-widest uppercase">Call ${Math.min(toCall, myPlayer.chips).toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+              <span className="leading-none text-[9px] font-black transition-opacity tracking-widest uppercase">
+                CALL ${toCall.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
             </button>
           )}
         </div>
@@ -109,7 +131,12 @@ const ActionPanel: React.FC<Props> = ({ myPlayer, gameState, onAction }) => {
             value={raiseAmount}
             onChange={handleInputChange}
             onBlur={() => { 
-              if(raiseAmount !== '') setRaiseAmount(clampedValue.toFixed(2)); 
+              if(raiseAmount !== '') {
+                const num = parseFloat(raiseAmount);
+                if(!isNaN(num)) {
+                   setRaiseAmount(num.toFixed(2));
+                }
+              }
             }}
             className="w-full h-full bg-[#0B0B0C] border border-[#C9A24D]/30 rounded-[1.2rem] px-8 py-2 text-[#C9A24D] font-black text-2xl outline-none focus:border-[#C9A24D] transition-all text-center shadow-inner placeholder:text-[#252528]"
             placeholder="0.00"

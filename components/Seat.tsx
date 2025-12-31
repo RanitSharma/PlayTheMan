@@ -100,6 +100,12 @@ const Seat: React.FC<Props> = ({
           </div>
         )}
 
+        {player.isSittingOut && !isBust && (
+          <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-2 py-1 bg-black/80 border border-white/10 text-[#C9A24D] font-black text-[7px] rounded-md flex items-center justify-center shadow-lg z-50 tracking-tighter">
+            SITTING OUT
+          </div>
+        )}
+
         <span className={`${isCompact ? 'text-[10px]' : 'text-[12px]'} font-black uppercase tracking-wider truncate w-full text-center text-[#808080]`}>
           {player.name}
         </span>

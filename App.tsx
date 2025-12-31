@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { GameState, GameStage, PlayerAction, Card, Player, ChatMessage, RoomSettings, Rank, Suit, FinancialRequest, FinancialRequestType } from './types';
@@ -62,6 +63,7 @@ class MockServer {
       switch (event) {
         case 'room:join': this.handleJoin(payload); break;
         case 'player:ready': this.handleReady(payload); break;
+        case 'player:toggle-sitout': this.handleToggleSitOut(payload); break;
         case 'game:start': this.startGame(); break;
         case 'settings:update': this.handleSettingsUpdate(payload); break;
         case 'action:submit': this.handleAction(payload); break;
@@ -105,7 +107,8 @@ class MockServer {
       isFolded: false, isAllIn: false, isReady: false,
       isSpectator, isConnected: true,
       seatIndex: this.getNextAvailableSeat(),
-      hasActedThisStreet: false
+      hasActedThisStreet: false,
+      isSittingOut: false
     };
     this.state.players.push(player);
     this.logSystem(`>>> ${name} joined.`);
@@ -131,6 +134,14 @@ class MockServer {
       }
     });
     this.broadcast('room:update', this.state);
+  }
+
+  private handleToggleSitOut(playerId: string) {
+    const p = this.state.players.find(p => p.id === playerId);
+    if (p) {
+      p.isSittingOut = !p.isSittingOut;
+      this.broadcast('room:update', this.state);
+    }
   }
 
   private applyApprovedRequests() {
@@ -166,10 +177,10 @@ class MockServer {
     this.applyApprovedRequests();
 
     const seatedPlayers = this.state.players.filter(p => !p.isSpectator && p.isReady && p.isConnected).sort((a,b) => a.seatIndex - b.seatIndex);
-    const seatedWithChips = seatedPlayers.filter(p => p.chips > 0);
+    const seatedWithChips = seatedPlayers.filter(p => p.chips > 0 && !p.isSittingOut);
 
     if (seatedWithChips.length < 2) {
-      this.logSystem(">>> Not enough players with chips to start.");
+      this.logSystem(">>> Not enough active players to start.");
       this.state.stage = GameStage.Lobby;
       this.broadcast('room:update', this.state);
       return;
@@ -512,7 +523,8 @@ class MockServer {
         isFolded: false, isAllIn: false, isReady: true,
         isAI: true, isSpectator: false, isConnected: true,
         seatIndex: this.getNextAvailableSeat(),
-        hasActedThisStreet: false
+        hasActedThisStreet: false,
+        isSittingOut: false
       };
       this.state.players.push(fakePlayer);
     }
@@ -693,6 +705,7 @@ export default function App() {
           onRevealFold={() => server.emit('player:reveal-fold', { playerId: myId })}
           onFinancialRequest={(type, amount) => server.emit('financial:request', { playerId: myId, type, amount })}
           onResolveRequest={(requestId, approved) => server.emit('financial:resolve', { requestId, approved })}
+          onToggleSitOut={() => server.emit('player:toggle-sitout', myId)}
         />
       )}
     </div>

@@ -16,6 +16,7 @@ interface Props {
   onRevealFold?: () => void;
   onFinancialRequest: (type: FinancialRequestType, amount: number) => void;
   onResolveRequest: (requestId: string, approved: boolean) => void;
+  onToggleSitOut: () => void;
 }
 
 const ProgressTimer: React.FC<{ 
@@ -67,7 +68,7 @@ const ProgressTimer: React.FC<{
 
 const PokerTable: React.FC<Props> = ({ 
   gameState, myId, onAction, onMuck, onChat, onDevBackToLobby, onRevealFold, 
-  onFinancialRequest, onResolveRequest 
+  onFinancialRequest, onResolveRequest, onToggleSitOut 
 }) => {
   const chatRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef<boolean>(true);
@@ -249,17 +250,28 @@ const PokerTable: React.FC<Props> = ({
             )}
             
             <div className="flex flex-col gap-3">
-              <button onClick={() => setRightPanelMode(rightPanelMode === 'ledger' ? 'chat' : 'ledger')} className={`backdrop-blur-xl border px-6 py-4 rounded-full text-[10px] font-black uppercase tracking-[0.4em] transition-all shadow-2xl ${rightPanelMode === 'ledger' ? 'bg-[#C9A24D] text-black border-black/20' : 'bg-[#141416]/90 text-[#C9A24D] border-[#C9A24D]/40 hover:bg-[#C9A24D] hover:text-black'}`}>
-                {rightPanelMode === 'ledger' ? 'Live Table' : 'Ledger'}
-              </button>
-              <button onClick={() => { setShowBankModal(true); setBankTab(isHost ? 'management' : 'request'); }} className="relative bg-[#141416]/90 border border-[#C9A24D]/40 text-[#C9A24D] px-6 py-4 rounded-full text-[10px] font-black uppercase tracking-[0.4em] transition-all hover:bg-[#C9A24D] hover:text-black shadow-2xl group">
-                Bank
-                {isHost && pendingCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full border border-black shadow-lg animate-bounce group-hover:animate-none">
-                    {pendingCount}
-                  </span>
-                )}
-              </button>
+              <div className="flex gap-3">
+                <button onClick={() => setRightPanelMode(rightPanelMode === 'ledger' ? 'chat' : 'ledger')} className={`backdrop-blur-xl border px-6 py-4 rounded-full text-[10px] font-black uppercase tracking-[0.4em] transition-all shadow-2xl ${rightPanelMode === 'ledger' ? 'bg-[#C9A24D] text-black border-black/20' : 'bg-[#141416]/90 text-[#C9A24D] border-[#C9A24D]/40 hover:bg-[#C9A24D] hover:text-black'}`}>
+                  {rightPanelMode === 'ledger' ? 'Chat' : 'Ledger'}
+                </button>
+                <button onClick={() => { setShowBankModal(true); setBankTab(isHost ? 'management' : 'request'); }} className="relative bg-[#141416]/90 border border-[#C9A24D]/40 text-[#C9A24D] px-6 py-4 rounded-full text-[10px] font-black uppercase tracking-[0.4em] transition-all hover:bg-[#C9A24D] hover:text-black shadow-2xl group">
+                  Bank
+                  {isHost && pendingCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full border border-black shadow-lg animate-bounce group-hover:animate-none">
+                      {pendingCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+              
+              {!myPlayer?.isSpectator && (
+                <button 
+                  onClick={onToggleSitOut}
+                  className={`backdrop-blur-xl border px-6 py-4 rounded-full text-[10px] font-black uppercase tracking-[0.4em] transition-all shadow-2xl ${myPlayer?.isSittingOut ? 'bg-red-600/90 text-white border-white/20' : 'bg-[#141416]/90 text-[#606060] border-white/10 hover:border-red-600/40 hover:text-red-600'}`}
+                >
+                  {myPlayer?.isSittingOut ? 'Sitting Out (Rejoin)' : 'Sit Out'}
+                </button>
+              )}
             </div>
           </div>
         </div>

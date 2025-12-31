@@ -1,3 +1,4 @@
+
 export enum Suit {
   Spades = 's', Hearts = 'h', Diamonds = 'd', Clubs = 'c'
 }
@@ -61,6 +62,7 @@ export interface Player {
   isThinking?: boolean;
   isWinner?: boolean;
   isRevealingFold?: boolean;
+  isSittingOut?: boolean;
   role?: 'D' | 'SB' | 'BB';
   lastAction?: {
     type: PlayerAction | string;
