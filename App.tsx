@@ -217,6 +217,7 @@ class MockServer {
     let sbIdx, bbIdx;
 
     if (seatedWithChips.length === 2) {
+      // Heads up: Dealer is SB, other is BB
       sbIdx = dIdx;
       bbIdx = (dIdx + 1) % seatedWithChips.length;
     } else {
@@ -242,9 +243,14 @@ class MockServer {
     this.state.lastRaiseAmount = bigBlind;
     this.state.minRaise = bigBlind * 2;
 
-    this.state.currentTurnPlayerId = seatedWithChips.length === 2 ? sb.id : seatedWithChips[(bbIdx + 1) % seatedWithChips.length].id;
-    this.state.actionStartTime = Date.now();
+    // In pre-flop, SB acts first in heads-up, but 3rd player (after BB) acts first in standard games
+    if (seatedWithChips.length === 2) {
+      this.state.currentTurnPlayerId = sb.id;
+    } else {
+      this.state.currentTurnPlayerId = seatedWithChips[(bbIdx + 1) % seatedWithChips.length].id;
+    }
     
+    this.state.actionStartTime = Date.now();
     this.logSystem(`>>> Hand started.`);
     this.updatePots();
     this.broadcast('room:update', this.state);
@@ -271,6 +277,7 @@ class MockServer {
     const validPots = [];
     for (const pot of rawPots) {
       if (pot.eligiblePlayerIds.length === 1) {
+        // Uncontested pot/slice
         const playerId = pot.eligiblePlayerIds[0];
         const player = this.state.players.find(p => p.id === playerId);
         const others = activePlayers.filter(p => p.id !== playerId);
@@ -321,16 +328,24 @@ class MockServer {
       case PlayerAction.Raise:
         if (amount === undefined) return;
         const totalIncrease = amount - player.betThisStreet;
+        const raiseSize = amount - maxStreetBet;
+        
         player.chips -= totalIncrease;
         player.betThisRound += totalIncrease;
         player.betThisStreet = amount;
-        const raiseSize = amount - maxStreetBet;
+        
+        // Update minimum raise for standard poker rules: new high bet + (high bet - previous high bet)
         this.state.minRaise = amount + Math.max(raiseSize, this.state.settings.bigBlind);
         this.state.lastRaiseAmount = raiseSize;
+        
         if (player.chips === 0) player.isAllIn = true;
         player.lastAction = { type: action, amount: amount, timestamp: Date.now() };
-        actionLabel = `${player.name} ${action.toLowerCase()}s.`;
-        this.state.players.forEach(p => { if (p.id !== playerId && !p.isFolded && !p.isAllIn) p.hasActedThisStreet = false; });
+        actionLabel = `${player.name} ${action.toLowerCase()}s to $${amount.toFixed(2)}.`;
+        
+        // Re-open betting for everyone else
+        this.state.players.forEach(p => { 
+          if (p.id !== playerId && !p.isFolded && !p.isAllIn) p.hasActedThisStreet = false; 
+        });
         break;
     }
     
@@ -350,16 +365,24 @@ class MockServer {
   private advanceTurn() {
     const activeAtTable = this.state.players.filter(p => !p.isSpectator && !p.isFolded);
     const maxStreetBet = Math.max(...this.state.players.map(p => p.betThisStreet));
+    
+    // Betting ends if:
+    // 1. Everyone has matched the max bet or is all-in
+    // 2. AND everyone has had a chance to act
+    const allMatched = activeAtTable.every(p => p.betThisStreet === maxStreetBet || p.isAllIn);
     const allActed = activeAtTable.every(p => p.hasActedThisStreet || p.isAllIn);
-    const matched = activeAtTable.every(p => p.betThisStreet === maxStreetBet || p.isAllIn);
 
-    if (allActed && matched) {
+    if (allMatched && allActed) {
       setTimeout(() => this.nextStage(), 600);
     } else {
       const seated = this.state.players.filter(p => !p.isSpectator).sort((a,b) => a.seatIndex - b.seatIndex);
       let nextIdx = (seated.findIndex(p => p.id === this.state.currentTurnPlayerId) + 1) % seated.length;
-      while (seated[nextIdx].isFolded || (seated[nextIdx].isAllIn && seated[nextIdx].hasActedThisStreet)) {
+      
+      let count = 0;
+      while (seated[nextIdx].isFolded || seated[nextIdx].isAllIn) {
           nextIdx = (nextIdx + 1) % seated.length;
+          count++;
+          if (count > 20) break; // Safety
       }
       this.state.currentTurnPlayerId = seated[nextIdx].id;
       this.state.actionStartTime = Date.now();
@@ -394,8 +417,11 @@ class MockServer {
     }
 
     this.updatePots();
+    
+    // Check if betting is even possible (at least 2 players with chips left)
     const active = this.state.players.filter(p => !p.isSpectator && !p.isFolded && !p.isAllIn);
     if (active.length < 2) {
+        // Auto-advance if no more betting can occur (everyone all-in or folded)
         setTimeout(() => this.nextStage(), 1000);
     } else {
         const seated = this.state.players.filter(p => !p.isSpectator).sort((a,b) => a.seatIndex - b.seatIndex);
@@ -415,7 +441,7 @@ class MockServer {
     
     const seated = this.state.players.filter(p => !p.isSpectator && !p.isFolded);
     seated.forEach(p => {
-      if (p.holeCards) {
+      if (p.holeCards && this.state.communityCards.length >= 3) {
         const evalResult = PokerEngine.evaluateHand([...this.state.communityCards, ...p.holeCards]);
         p.handDescription = evalResult.label;
       }
@@ -462,7 +488,7 @@ class MockServer {
       })).sort((a,b) => b.s - a.s);
 
       const maxScore = scored[0].s;
-      const winners = scored.filter(s => s.s === maxScore).map(s => s.p);
+      const winners = scored.filter(s => Math.abs(s.s - maxScore) < 0.0001).map(s => s.p);
       
       const oddChipDistributions = PokerEngine.resolveOddChips(pot.amount, winners, this.state.dealerIndex, this.state.players);
       
@@ -595,9 +621,12 @@ class MockServer {
 
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `You are ${bot.name}, a professional poker bot.
-      Hand: ${bot.holeCards?.map(c => c.rank+c.suit).join(', ')}, Board: ${this.state.communityCards.map(c => c.rank+c.suit).join(', ')}, Pot: ${totalPot}, To Call: ${toC}.
-      Decision JSON: {"action": "fold"|"call"|"check"|"raise", "raiseTo": number|null}`;
+      const prompt = `You are ${bot.name}, a professional poker bot. 
+      Stage: ${this.state.stage}, Board: ${this.state.communityCards.map(c => c.rank+c.suit).join(', ')}, 
+      Hand: ${bot.holeCards?.map(c => c.rank+c.suit).join(', ')}, 
+      Pot: ${totalPot}, To Call: ${toC}, Your Stack: ${bot.chips}.
+      Decide your move. Return JSON: {"action": "fold"|"call"|"check"|"raise", "raiseTo": number|null}.
+      The "raiseTo" must be at least ${this.state.minRaise} and no more than ${bot.chips + bot.betThisStreet}.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -609,8 +638,10 @@ class MockServer {
       let act = (d.action || 'check').toUpperCase() as PlayerAction;
       let amt = d.raiseTo;
       
-      if (act === PlayerAction.Raise && (!amt || amt < this.state.minRaise)) amt = this.state.minRaise;
-      if (amt && amt > bot.chips + bot.betThisStreet) amt = bot.chips + bot.betThisStreet;
+      if (act === PlayerAction.Raise || act === PlayerAction.Bet) {
+        if (!amt || amt < this.state.minRaise) amt = this.state.minRaise;
+        if (amt > bot.chips + bot.betThisStreet) amt = bot.chips + bot.betThisStreet;
+      }
 
       this.handleAction({ playerId: bot.id, action: act, amount: amt });
     } catch (e) {
