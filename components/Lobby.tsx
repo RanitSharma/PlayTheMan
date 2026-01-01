@@ -29,7 +29,6 @@ const Lobby: React.FC<Props> = ({
   const [bankTab, setBankTab] = useState<'request' | 'management'>('request');
   const [bankAmount, setBankAmount] = useState<number | undefined>(undefined);
 
-  // Local string state to handle typing decimals naturally without parent numeric state interference
   const [inputState, setInputState] = useState({
     smallBlind: gameState.settings.smallBlind > 0 ? gameState.settings.smallBlind.toString() : '',
     bigBlind: gameState.settings.bigBlind > 0 ? gameState.settings.bigBlind.toString() : '',
@@ -37,7 +36,7 @@ const Lobby: React.FC<Props> = ({
   });
 
   const myPlayer = gameState.players.find(p => p.id === myId);
-  const seated = gameState.players.filter(p => !p.isSpectator).sort((a, b) => {
+  const seated = [...gameState.players].sort((a, b) => {
       if (a.id === gameState.hostId) return -1;
       if (b.id === gameState.hostId) return 1;
       return 0;
@@ -53,7 +52,6 @@ const Lobby: React.FC<Props> = ({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>, key: keyof RoomSettings) => {
     const val = e.target.value;
-    // Strictly allow only digits, one optional dot, and max 2 decimal places
     if (val === '' || /^\d*\.?\d{0,2}$/.test(val)) {
       setInputState(prev => ({ ...prev, [key]: val }));
       const numericVal = parseFloat(val);

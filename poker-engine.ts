@@ -149,12 +149,9 @@ export class PokerEngine {
   }
 
   static calculatePots(players: Player[]): Pot[] {
-    // Standard poker side pot algorithm:
-    // 1. Find all levels of contributions from active/all-in players
     const contributors = players.filter(p => p.betThisRound > 0);
     if (contributors.length === 0) return [];
     
-    // Sort all unique bet levels
     const levels = Array.from(new Set(contributors.map(p => p.betThisRound))).sort((a, b) => a - b);
     
     const pots: Pot[] = [];
@@ -191,8 +188,7 @@ export class PokerEngine {
     });
 
     if (remainingCents > 0) {
-      // Standard rule: odd chips go to the first eligible player clockwise from the button
-      const seated = [...players].filter(p => !p.isSpectator).sort((a, b) => a.seatIndex - b.seatIndex);
+      const seated = [...players].sort((a, b) => a.seatIndex - b.seatIndex);
       const dIdxInSeated = seated.findIndex(p => p.seatIndex === dealerIndex);
       for (let i = 1; i <= seated.length && remainingCents > 0; i++) {
         const checkIdx = (dIdxInSeated + i) % seated.length;

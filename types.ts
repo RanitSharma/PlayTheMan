@@ -52,7 +52,6 @@ export interface Player {
   isFolded: boolean;
   isAllIn: boolean;
   isReady: boolean;
-  isSpectator: boolean;
   isConnected: boolean;
   isAI?: boolean;
   seatIndex: number;

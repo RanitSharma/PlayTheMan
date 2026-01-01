@@ -1,19 +1,19 @@
+
 import React, { useState } from 'react';
 import { Logo } from './Logo';
 
 interface HomeProps {
-  onJoin: (name: string, isSpectator: boolean) => void;
+  onJoin: (name: string) => void;
 }
 
 export const Home: React.FC<HomeProps> = ({ onJoin }) => {
   const [name, setName] = useState('');
-  const [isSpec, setIsSpec] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedName = name.trim();
     if (trimmedName.length >= 2 && trimmedName.length <= 12) {
-      onJoin(trimmedName, isSpec);
+      onJoin(trimmedName);
     }
   };
 
@@ -49,20 +49,6 @@ export const Home: React.FC<HomeProps> = ({ onJoin }) => {
           >
             Enter Room
           </button>
-
-          <div className="flex items-center justify-center gap-4 pt-1">
-            <div 
-              className={`flex items-center gap-3 cursor-pointer select-none group`} 
-              onClick={() => setIsSpec(!isSpec)}
-            >
-              <div className={`w-5 h-5 rounded border-2 transition-all flex items-center justify-center ${isSpec ? 'bg-[#C9A24D] border-[#C9A24D]' : 'bg-transparent border-white/10'}`}>
-                {isSpec && <span className="text-black font-black text-[10px]">✓</span>}
-              </div>
-              <span className={`text-[11px] font-black uppercase tracking-[0.3em] transition-colors duration-300 ${isSpec ? 'text-[#C9A24D]' : 'text-[#606060]'}`}>
-                Spectator Mode
-              </span>
-            </div>
-          </div>
         </form>
 
         <div className="mt-16 space-y-4">

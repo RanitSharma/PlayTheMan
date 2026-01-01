@@ -87,17 +87,16 @@ class MockServer {
     this.handleChatMessage({ senderId: 'system', senderName: '', text });
   }
 
-  private handleJoin({ name, playerId, isSpectator }: { name: string, playerId: string, isSpectator: boolean }) {
+  private handleJoin({ name, playerId }: { name: string, playerId: string }) {
     if (this.state.players.some(p => p.id === playerId)) {
       const p = this.state.players.find(p => p.id === playerId)!;
       p.isConnected = true;
-      p.isSpectator = isSpectator;
       this.broadcast('room:update', this.state);
       return;
     }
-    if (!this.state.hostId && !isSpectator) this.state.hostId = playerId;
+    if (!this.state.hostId) this.state.hostId = playerId;
 
-    const startingStack = isSpectator ? 0 : this.state.settings.startingStack;
+    const startingStack = this.state.settings.startingStack;
     const player: Player = {
       id: playerId, name,
       chips: startingStack,
@@ -105,7 +104,7 @@ class MockServer {
       totalBuyOut: 0,
       betThisRound: 0, betThisStreet: 0,
       isFolded: false, isAllIn: false, isReady: false,
-      isSpectator, isConnected: true,
+      isConnected: true,
       seatIndex: this.getNextAvailableSeat(),
       hasActedThisStreet: false,
       isSittingOut: false
@@ -128,10 +127,8 @@ class MockServer {
     this.state.settings = { ...this.state.settings, ...newSettings };
     
     this.state.players.forEach(p => {
-      if (!p.isSpectator) {
-        p.chips = this.state.settings.startingStack;
-        p.totalBuyIn = this.state.settings.startingStack;
-      }
+      p.chips = this.state.settings.startingStack;
+      p.totalBuyIn = this.state.settings.startingStack;
     });
     this.broadcast('room:update', this.state);
   }
@@ -176,7 +173,7 @@ class MockServer {
 
     this.applyApprovedRequests();
 
-    const seatedPlayers = this.state.players.filter(p => !p.isSpectator && p.isReady && p.isConnected).sort((a,b) => a.seatIndex - b.seatIndex);
+    const seatedPlayers = this.state.players.filter(p => p.isReady && p.isConnected).sort((a,b) => a.seatIndex - b.seatIndex);
     const seatedWithChips = seatedPlayers.filter(p => p.chips > 0 && !p.isSittingOut);
 
     if (seatedWithChips.length < 2) {
@@ -217,7 +214,6 @@ class MockServer {
     let sbIdx, bbIdx;
 
     if (seatedWithChips.length === 2) {
-      // Heads up: Dealer is SB, other is BB
       sbIdx = dIdx;
       bbIdx = (dIdx + 1) % seatedWithChips.length;
     } else {
@@ -243,7 +239,6 @@ class MockServer {
     this.state.lastRaiseAmount = bigBlind;
     this.state.minRaise = bigBlind * 2;
 
-    // In pre-flop, SB acts first in heads-up, but 3rd player (after BB) acts first in standard games
     if (seatedWithChips.length === 2) {
       this.state.currentTurnPlayerId = sb.id;
     } else {
@@ -272,12 +267,11 @@ class MockServer {
 
   private updatePots() {
     let rawPots = PokerEngine.calculatePots(this.state.players);
-    const activePlayers = this.state.players.filter(p => !p.isFolded && !p.isSpectator);
+    const activePlayers = this.state.players.filter(p => !p.isFolded);
     
     const validPots = [];
     for (const pot of rawPots) {
       if (pot.eligiblePlayerIds.length === 1) {
-        // Uncontested pot/slice
         const playerId = pot.eligiblePlayerIds[0];
         const player = this.state.players.find(p => p.id === playerId);
         const others = activePlayers.filter(p => p.id !== playerId);
@@ -299,7 +293,7 @@ class MockServer {
   private handleAction({ playerId, action, amount }: { playerId: string, action: PlayerAction, amount?: number }) {
     if (this.state.currentTurnPlayerId !== playerId) return;
     const player = this.state.players.find(p => p.id === playerId)!;
-    const maxStreetBet = Math.max(...this.state.players.filter(p => !p.isSpectator).map(p => p.betThisStreet));
+    const maxStreetBet = Math.max(...this.state.players.map(p => p.betThisStreet));
     const toCall = maxStreetBet - player.betThisStreet;
 
     player.hasActedThisStreet = true;
@@ -334,7 +328,6 @@ class MockServer {
         player.betThisRound += totalIncrease;
         player.betThisStreet = amount;
         
-        // Update minimum raise for standard poker rules: new high bet + (high bet - previous high bet)
         this.state.minRaise = amount + Math.max(raiseSize, this.state.settings.bigBlind);
         this.state.lastRaiseAmount = raiseSize;
         
@@ -342,7 +335,6 @@ class MockServer {
         player.lastAction = { type: action, amount: amount, timestamp: Date.now() };
         actionLabel = `${player.name} ${action.toLowerCase()}s to $${amount.toFixed(2)}.`;
         
-        // Re-open betting for everyone else
         this.state.players.forEach(p => { 
           if (p.id !== playerId && !p.isFolded && !p.isAllIn) p.hasActedThisStreet = false; 
         });
@@ -351,7 +343,7 @@ class MockServer {
     
     this.state.lastStreetAction = actionLabel;
     
-    const remaining = this.state.players.filter(p => !p.isSpectator && !p.isFolded);
+    const remaining = this.state.players.filter(p => !p.isFolded);
     if (remaining.length === 1) {
       this.updatePots();
       this.settleHand();
@@ -363,26 +355,23 @@ class MockServer {
   }
 
   private advanceTurn() {
-    const activeAtTable = this.state.players.filter(p => !p.isSpectator && !p.isFolded);
+    const activeAtTable = this.state.players.filter(p => !p.isFolded);
     const maxStreetBet = Math.max(...this.state.players.map(p => p.betThisStreet));
     
-    // Betting ends if:
-    // 1. Everyone has matched the max bet or is all-in
-    // 2. AND everyone has had a chance to act
     const allMatched = activeAtTable.every(p => p.betThisStreet === maxStreetBet || p.isAllIn);
     const allActed = activeAtTable.every(p => p.hasActedThisStreet || p.isAllIn);
 
     if (allMatched && allActed) {
       setTimeout(() => this.nextStage(), 600);
     } else {
-      const seated = this.state.players.filter(p => !p.isSpectator).sort((a,b) => a.seatIndex - b.seatIndex);
+      const seated = this.state.players.sort((a,b) => a.seatIndex - b.seatIndex);
       let nextIdx = (seated.findIndex(p => p.id === this.state.currentTurnPlayerId) + 1) % seated.length;
       
       let count = 0;
       while (seated[nextIdx].isFolded || seated[nextIdx].isAllIn) {
           nextIdx = (nextIdx + 1) % seated.length;
           count++;
-          if (count > 20) break; // Safety
+          if (count > 20) break;
       }
       this.state.currentTurnPlayerId = seated[nextIdx].id;
       this.state.actionStartTime = Date.now();
@@ -418,13 +407,11 @@ class MockServer {
 
     this.updatePots();
     
-    // Check if betting is even possible (at least 2 players with chips left)
-    const active = this.state.players.filter(p => !p.isSpectator && !p.isFolded && !p.isAllIn);
+    const active = this.state.players.filter(p => !p.isFolded && !p.isAllIn);
     if (active.length < 2) {
-        // Auto-advance if no more betting can occur (everyone all-in or folded)
         setTimeout(() => this.nextStage(), 1000);
     } else {
-        const seated = this.state.players.filter(p => !p.isSpectator).sort((a,b) => a.seatIndex - b.seatIndex);
+        const seated = this.state.players.sort((a,b) => a.seatIndex - b.seatIndex);
         let nextIdx = (this.state.dealerIndex + 1) % seated.length;
         while (seated[nextIdx].isFolded || seated[nextIdx].isAllIn) nextIdx = (nextIdx + 1) % seated.length;
         this.state.currentTurnPlayerId = seated[nextIdx].id;
@@ -439,7 +426,7 @@ class MockServer {
     this.state.lastActionPlayerId = null;
     this.updatePots();
     
-    const seated = this.state.players.filter(p => !p.isSpectator && !p.isFolded);
+    const seated = this.state.players.filter(p => !p.isFolded);
     seated.forEach(p => {
       if (p.holeCards && this.state.communityCards.length >= 3) {
         const evalResult = PokerEngine.evaluateHand([...this.state.communityCards, ...p.holeCards]);
@@ -505,7 +492,7 @@ class MockServer {
   }
 
   private resetForNextHand() {
-    const seatedWithChips = this.state.players.filter(p => !p.isSpectator && p.chips > 0 && p.isConnected).sort((a,b) => a.seatIndex - b.seatIndex);
+    const seatedWithChips = this.state.players.filter(p => p.chips > 0 && p.isConnected).sort((a,b) => a.seatIndex - b.seatIndex);
     if (seatedWithChips.length < 2) {
       this.state.stage = GameStage.Lobby;
       this.broadcast('room:update', this.state);
@@ -532,8 +519,7 @@ class MockServer {
   }
 
   private handleFillAIs() {
-    const currentSeated = this.state.players.filter(p => !p.isSpectator);
-    const needed = 10 - currentSeated.length;
+    const needed = 10 - this.state.players.length;
     if (needed <= 0) return;
 
     for (let i = 0; i < needed; i++) {
@@ -547,7 +533,7 @@ class MockServer {
         totalBuyOut: 0,
         betThisRound: 0, betThisStreet: 0,
         isFolded: false, isAllIn: false, isReady: true,
-        isAI: true, isSpectator: false, isConnected: true,
+        isAI: true, isConnected: true,
         seatIndex: this.getNextAvailableSeat(),
         hasActedThisStreet: false,
         isSittingOut: false
@@ -615,7 +601,7 @@ class MockServer {
     bot.isThinking = true;
     this.broadcast('room:update', this.state);
     
-    const maxB = Math.max(...this.state.players.filter(p => !p.isSpectator).map(p => p.betThisStreet));
+    const maxB = Math.max(...this.state.players.map(p => p.betThisStreet));
     const toC = maxB - bot.betThisStreet;
     const totalPot = this.state.pots.reduce((sum, pot) => sum + pot.amount, 0);
 
@@ -652,7 +638,7 @@ class MockServer {
   handleTimeout(playerId: string) {
     if (this.state.currentTurnPlayerId !== playerId) return;
     const p = this.state.players.find(p => p.id === playerId)!;
-    const maxB = Math.max(...this.state.players.filter(p => !p.isSpectator).map(p => p.betThisStreet));
+    const maxB = Math.max(...this.state.players.map(p => p.betThisStreet));
     const toC = maxB - p.betThisStreet;
     this.handleAction({ playerId, action: toC === 0 ? PlayerAction.Check : PlayerAction.Fold });
   }
@@ -700,8 +686,8 @@ export default function App() {
     return () => clearInterval(interval);
   }, [gameState]);
 
-  const onJoinRoom = (name: string, isSpectator: boolean) => {
-    server.emit('room:join', { name, playerId: myId, isSpectator });
+  const onJoinRoom = (name: string) => {
+    server.emit('room:join', { name, playerId: myId });
     setIsJoined(true);
   };
 

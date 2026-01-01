@@ -21,15 +21,11 @@ const Seat: React.FC<Props> = ({
   muckChoicePlayerId, lastActionPlayerId, isHighlighted, isDimmed 
 }) => {
   const isShowdown = stage === GameStage.Showdown;
-  // A card should be revealed if:
-  // 1. It belongs to the current user (isMe)
-  // 2. The game is at showdown and the player didn't fold
-  // 3. The player has explicitly opted to reveal their hand (isRevealingFold)
   const shouldReveal = isMe || (isShowdown && !player.isFolded) || !!player.isRevealingFold;
   
   const isWinner = player.isWinner;
   const isLoser = isShowdown && !player.isFolded && !isWinner;
-  const isBust = player.chips <= 0 && !player.isSpectator && !player.holeCards;
+  const isBust = player.chips <= 0 && !player.holeCards;
 
   const showActionBadge = player.id === lastActionPlayerId && player.lastAction;
 

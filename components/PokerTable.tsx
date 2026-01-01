@@ -136,8 +136,7 @@ const PokerTable: React.FC<Props> = ({
   ]);
 
   const totalPotValue = gameState.pots.reduce((sum, pot) => sum + pot.amount, 0);
-  const totalActivePlayers = gameState.players.filter(p => !p.isSpectator).length;
-  const isCompact = totalActivePlayers > 6;
+  const isCompact = gameState.players.length > 6;
 
   const getSeatPos = (index: number) => {
     const mySeatIndex = myPlayer?.seatIndex ?? 0;
@@ -162,6 +161,8 @@ const PokerTable: React.FC<Props> = ({
     }
     return acc;
   }, [] as any[]);
+
+  const hasSidePots = displayPots.length > 1;
 
   const ledgerEntries = gameState.players
     .filter(p => p.totalBuyIn > 0 || p.totalBuyOut > 0 || p.chips > 0)
@@ -191,30 +192,43 @@ const PokerTable: React.FC<Props> = ({
       <div className="flex-1 relative flex flex-col bg-[#0B0B0C] poker-felt overflow-hidden">
         <div className="w-full flex flex-col items-center pt-6 pb-2 z-[200] pointer-events-none">
            <div 
-             className="flex flex-col items-center mb-4 cursor-pointer group relative pointer-events-auto"
-             onMouseEnter={() => setIsPotExpanded(true)}
+             className={`flex flex-col items-center mb-4 relative pointer-events-auto ${hasSidePots ? 'cursor-pointer group' : ''}`}
+             onMouseEnter={() => hasSidePots && setIsPotExpanded(true)}
              onMouseLeave={() => {
                setIsPotExpanded(false);
                setHoveredPotIndex(null);
              }}
-             onClick={() => setIsPotExpanded(!isPotExpanded)}
+             onClick={() => hasSidePots && setIsPotExpanded(!isPotExpanded)}
            >
-              <div className="text-[10px] font-black text-[#C9A24D]/60 uppercase tracking-[0.8em] mb-1">Total Pot</div>
+              <div className="flex items-center gap-2 mb-1">
+                <div className="text-[10px] font-black text-[#C9A24D]/60 uppercase tracking-[0.8em]">Total Pot</div>
+                {hasSidePots && (
+                  <div className="text-[#C9A24D] text-[10px] animate-pulse">
+                    <svg className={`w-3 h-3 transition-transform duration-300 ${isPotExpanded ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                )}
+              </div>
               <div className="text-5xl font-black text-[#C9A24D] tracking-tighter drop-shadow-[0_0_40px_rgba(201,162,77,0.5)] transition-transform group-hover:scale-105 duration-300">
                 ${totalPotValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </div>
               
-              {isPotExpanded && (
+              {isPotExpanded && hasSidePots && (
                 <div className="absolute top-[110%] left-1/2 -translate-x-1/2 w-64 bg-[#141416]/95 backdrop-blur-3xl border border-[#C9A24D]/30 rounded-[2rem] p-6 shadow-[0_30px_100px_rgba(0,0,0,0.8)] z-[1000] animate-in zoom-in-95 fade-in duration-200">
-                  <div className="space-y-4">
-                    {displayPots.length > 0 ? displayPots.map((pot, idx) => (
+                  <div className="text-[9px] font-black text-[#606060] uppercase tracking-[0.4em] mb-4 text-center">Side Pot Breakdown</div>
+                  <div className="space-y-3">
+                    {displayPots.map((pot, idx) => (
                         <div key={idx} className={`p-3 rounded-xl border transition-all duration-200 flex flex-col gap-1 ${hoveredPotIndex === idx ? 'bg-[#C9A24D]/10 border-[#C9A24D]/60' : 'bg-[#0B0B0C] border-white/5'}`}>
                           <div className="flex justify-between items-center">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-[#C9A24D]">Pot {idx + 1}</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest text-[#C9A24D]">{idx === 0 ? "Main Pot" : `Side Pot ${idx}`}</span>
                             <span className="text-[14px] font-black text-white">${pot.amount.toFixed(2)}</span>
                           </div>
+                          <div className="text-[8px] font-bold text-[#404040] uppercase tracking-tighter">
+                            {pot.eligiblePlayerIds.length} Eligible Players
+                          </div>
                         </div>
-                    )) : <div className="text-[10px] text-center font-black text-[#404040] uppercase">No active pots</div>}
+                    ))}
                   </div>
                 </div>
               )}
@@ -264,7 +278,7 @@ const PokerTable: React.FC<Props> = ({
                 </button>
               </div>
               
-              {!myPlayer?.isSpectator && (
+              {myPlayer && (
                 <button 
                   onClick={onToggleSitOut}
                   className={`backdrop-blur-xl border px-6 py-4 rounded-full text-[10px] font-black uppercase tracking-[0.4em] transition-all shadow-2xl ${myPlayer?.isSittingOut ? 'bg-red-600/90 text-white border-white/20' : 'bg-[#141416]/90 text-[#606060] border-white/10 hover:border-red-600/40 hover:text-red-600'}`}
@@ -282,7 +296,7 @@ const PokerTable: React.FC<Props> = ({
             <div className="flex items-center gap-6 sm:gap-10 z-20">
               <div className="flex gap-4 sm:gap-6 h-32 sm:h-44">
                 {[...Array(5)].map((_, i) => (
-                  <div key={i} className={`w-20 h-full sm:w-28 rounded-xl bg-[#0B0B0C] border border-[#C9A24D]/10 flex items-center justify-center shadow-[0_20px_40px_rgba(0,0,0,0.9)] overflow-hidden transition-all duration-700 ${gameState.communityCards[i] ? 'opacity-100 scale-100' : 'opacity-20 scale-95'}`}>
+                  <div key={i} className={`w-20 h-full sm:w-28 rounded-xl bg-black/40 border border-[#C9A24D]/10 flex items-center justify-center overflow-hidden transition-all duration-700 ${gameState.communityCards[i] ? 'opacity-100 scale-100' : 'opacity-20 scale-95'}`}>
                     {gameState.communityCards[i] ? <Card card={gameState.communityCards[i]} compact isBoard /> : <div className="text-[10px] font-black tracking-[0.5em] text-[#C9A24D] opacity-10">PTM</div>}
                   </div>
                 ))}
@@ -297,7 +311,7 @@ const PokerTable: React.FC<Props> = ({
 
             <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 100 }}>
               {[...Array(10)].map((_, i) => {
-                const playerAtSeat = gameState.players.find(p => !p.isSpectator && p.seatIndex === i);
+                const playerAtSeat = gameState.players.find(p => p.seatIndex === i);
                 if (!playerAtSeat) return null;
                 const pos = getSeatPos(i);
                 return (
@@ -322,7 +336,7 @@ const PokerTable: React.FC<Props> = ({
         <div className="absolute top-6 right-6 z-[800] flex flex-col items-end gap-3 pointer-events-none">
           <div className="pointer-events-auto transform scale-90 origin-top-right flex flex-col items-end gap-3">
              
-             {myPlayer && !myPlayer.isFolded && !myPlayer.isSpectator && gameState.currentTurnPlayerId === myId && gameState.stage !== GameStage.Showdown ? (
+             {myPlayer && !myPlayer.isFolded && gameState.currentTurnPlayerId === myId && gameState.stage !== GameStage.Showdown ? (
                <ActionPanel myPlayer={myPlayer} gameState={gameState} onAction={onAction} />
              
              ) : isMuckChoiceActive ? (

@@ -19,7 +19,7 @@ export const Card: React.FC<CardProps> = ({ card, compact, isBoard, isMinimal })
   
   if (isMinimal) {
     return (
-      <div className="w-full h-full bg-[#0B0B0C] rounded-lg flex flex-col items-center justify-center font-black border border-[#C9A24D]/20 shadow-lg relative overflow-hidden p-1">
+      <div className="w-full h-full bg-[#0B0B0C] rounded-lg flex flex-col items-center justify-center font-black border border-[#C9A24D]/20 shadow-md relative overflow-hidden p-1">
         <div className="flex-1 flex items-center justify-center pt-1">
           <span className="text-white text-[13px] sm:text-[15px] font-bold leading-none">
             {card.rank}
@@ -35,7 +35,7 @@ export const Card: React.FC<CardProps> = ({ card, compact, isBoard, isMinimal })
   }
 
   return (
-    <div className={`w-full h-full bg-[#0B0B0C] rounded-xl flex flex-col items-center justify-center font-black border border-[#C9A24D]/40 shadow-[0_15px_40px_rgba(0,0,0,0.9)] relative overflow-hidden ${compact ? 'p-1' : 'p-4 sm:p-6'}`}>
+    <div className={`w-full h-full bg-[#0B0B0C] rounded-xl flex flex-col items-center justify-center font-black border border-[#C9A24D]/40 shadow-xl relative overflow-hidden ${compact ? 'p-1' : 'p-4 sm:p-6'}`}>
       
       {/* Subtle Texture & Inner Border Layer */}
       <div className="absolute inset-0 opacity-[0.2] pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/dark-leather.png')]" />
@@ -45,7 +45,7 @@ export const Card: React.FC<CardProps> = ({ card, compact, isBoard, isMinimal })
       <div className={`absolute ${compact ? 'top-1.5 left-2' : 'top-5 left-6'} flex flex-col items-center leading-none z-20`}>
         <span className={`
           ${compact ? 'text-[22px] sm:text-[24px]' : 'text-5xl sm:text-7xl'} 
-          text-[#C9A24D] font-serif font-bold tracking-tighter drop-shadow-[0_2px_10px_rgba(0,0,0,1)]
+          text-[#C9A24D] font-serif font-bold tracking-tighter drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]
         `}>
           {card.rank}
         </span>
@@ -59,7 +59,7 @@ export const Card: React.FC<CardProps> = ({ card, compact, isBoard, isMinimal })
         <span className={`
           ${suitColorClass} 
           ${compact ? (isBoard ? 'text-7xl' : 'text-6xl') : 'text-9xl sm:text-[11rem]'} 
-          drop-shadow-[0_10px_30px_rgba(0,0,0,0.9)] leading-none select-none
+          leading-none select-none
         `}>
           {suitIcon}
         </span>

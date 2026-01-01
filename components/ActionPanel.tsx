@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Player, GameState, PlayerAction } from '../types';
 
 interface Props {
@@ -9,7 +9,7 @@ interface Props {
 }
 
 const ActionPanel: React.FC<Props> = ({ myPlayer, gameState, onAction }) => {
-  const maxStreetBet = Math.max(...gameState.players.filter(p => !p.isSpectator).map(p => p.betThisStreet));
+  const maxStreetBet = Math.max(...gameState.players.map(p => p.betThisStreet));
   const toCall = maxStreetBet - myPlayer.betThisStreet;
   const canCheck = toCall === 0;
   const maxPossible = myPlayer.chips + myPlayer.betThisStreet;
@@ -38,7 +38,7 @@ const ActionPanel: React.FC<Props> = ({ myPlayer, gameState, onAction }) => {
         // Default for opening if nothing is typed: min raise
         base = gameState.minRaise;
       } else {
-        // Default for facing action: +1.5x logic -> (1.5 * maxStreetBet) + maxStreetBet
+        // Default for facing action: 2.5x the call
         base = maxStreetBet * 2.5;
       }
     } else {
@@ -53,17 +53,17 @@ const ActionPanel: React.FC<Props> = ({ myPlayer, gameState, onAction }) => {
 
   const clampedValue = getClampedRaise();
 
-  // Facing a bet: +1.5x, +2x, +3x, ALL-IN
+  // Facing a bet: Min, 2.5x, 3x, ALL-IN
   const facingBetIncrements = [
-    { label: '+1.5×', multiplier: 1.5 },
-    { label: '+2×', multiplier: 2.0 },
-    { label: '+3×', multiplier: 3.0 },
+    { label: 'Min', multiplier: 0 }, // Special value for min raise
+    { label: '2.5×', multiplier: 2.5 },
+    { label: '3×', multiplier: 3.0 },
     { label: 'ALL-IN', multiplier: -1 },
   ];
 
-  // Starting the action: 25%, 50%, 75%, POT, ALL-IN
+  // Starting the action: 33%, 50%, 75%, POT, ALL-IN
   const startingActionIncrements = [
-    { label: '25%', multiplier: 0.25 },
+    { label: '33%', multiplier: 0.33 },
     { label: '50%', multiplier: 0.5 },
     { label: '75%', multiplier: 0.75 },
     { label: 'POT', multiplier: 1.0 },
@@ -76,14 +76,18 @@ const ActionPanel: React.FC<Props> = ({ myPlayer, gameState, onAction }) => {
       return;
     }
 
+    if (mult === 0) {
+      setRaiseAmount(gameState.minRaise.toFixed(2));
+      return;
+    }
+
     let calculatedAmount = 0;
     if (canCheck) {
-      // 25% is 25% of current pot
+      // Percentage of current pot
       calculatedAmount = currentTotalPot * mult;
     } else {
-      // Formula: (multiplier * highBet) + highBet 
-      // i.e. "1.5x the call + the call"
-      calculatedAmount = (mult * maxStreetBet) + maxStreetBet;
+      // Multiplier of the current high bet
+      calculatedAmount = mult * maxStreetBet;
     }
 
     // Clamp and format to 2 decimals
